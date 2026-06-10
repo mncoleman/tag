@@ -40,6 +40,22 @@
   #banner .big{font-size:20px;font-weight:700;letter-spacing:.01em;
     text-shadow:0 2px 18px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;gap:8px;}
   #banner .big svg{width:19px;height:19px;}
+
+  /* single-screen host join panel */
+  #hostInfo{display:none;top:14px;right:14px;text-align:center;width:208px;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;backdrop-filter:blur(10px);}
+  #hostInfo.show{display:block;}
+  /* host mode: every card lives in a reserved side margin, never over the arena */
+  body.spectator #status{display:none;}
+  body.spectator #mini{display:none;}
+  body.spectator #board{min-width:0;width:208px;}
+  body.spectator #feed{width:208px;max-height:calc(100vh - 420px);}
+  #hostInfo .hi-label{font-size:11px;letter-spacing:.22em;color:var(--dim);text-transform:uppercase;}
+  #hostInfo .hi-code{font-size:28px;font-weight:800;letter-spacing:.13em;color:var(--accent);line-height:1.1;margin:1px 0 4px;}
+  #hostInfo .hi-sub{font-size:11.5px;color:var(--dim);}
+  #hostInfo .hi-sub b{color:var(--txt);font-weight:700;}
+  #hostInfo .hi-count{margin-top:7px;font-size:12px;color:var(--txt);font-weight:700;}
+  @media (max-width:640px){ #hostInfo .hi-code{font-size:23px;} #hostInfo{padding:9px 16px;} }
   #banner .sub{font-size:12px;color:var(--dim);margin-top:2px;}
 
   #status{top:14px;right:14px;background:var(--panel);border:1px solid var(--line);
@@ -206,6 +222,12 @@
 <div id="board" class="hud"><h3>Scoreboard</h3><div id="boardRows"></div></div>
 <div id="feed" class="hud"></div>
 <div id="banner" class="hud"><div class="big" id="bannerBig"></div><div class="sub" id="bannerSub"></div></div>
+<div id="hostInfo" class="hud">
+  <div class="hi-label">Join the game</div>
+  <div class="hi-code" id="hostCode">----</div>
+  <div class="hi-sub">on your phone open <b>tag.mncoleman.com</b>, tap <b>Join a room</b>, enter this code</div>
+  <div class="hi-count" id="hostCount">0 players connected</div>
+</div>
 <div id="status" class="hud">
   <div class="pill"><span class="led"></span><span id="statText" class="muted">solo</span></div>
   <div id="statCode" style="margin-top:4px"></div>
@@ -242,11 +264,13 @@
     <h1><span>Tag</span></h1>
     <p class="tag">Top-down chase through the obstacle arena. Catch others while you're IT to score.</p>
 
-    <label class="fld">Your name</label>
-    <input id="nameIn" type="text" maxlength="14" placeholder="Player" />
+    <div id="meFields">
+      <label class="fld">Your name</label>
+      <input id="nameIn" type="text" maxlength="14" placeholder="Player" />
 
-    <label class="fld">Your orb</label>
-    <div class="emojiGrid" id="emojiGrid"></div>
+      <label class="fld">Your orb</label>
+      <div class="emojiGrid" id="emojiGrid"></div>
+    </div>
 
     <label class="fld">Mode</label>
     <div class="modes" id="modes">
@@ -259,8 +283,12 @@
         <div><div class="t">Solo + bots</div><div class="d">Practice against AI orbs. No networking.</div></div>
       </div>
       <div class="mode" data-mode="online">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
-        <div><div class="t">Online room</div><div class="d">Share a room code to play across different devices / networks (uses an internet relay).</div></div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></div>
+        <div><div class="t">Join a room</div><div class="d">Enter a room code to join a game on another device — including a single-screen host. Or type a new code to start your own.</div></div>
+      </div>
+      <div class="mode" data-mode="screen">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <div><div class="t">Single screen (host display)</div><div class="d">This screen shows the whole arena with a join code. Everyone plays from their own phone — you won't have an orb here.</div></div>
       </div>
     </div>
 
@@ -281,7 +309,7 @@
     </div>
 
     <div id="roomWrap">
-      <label class="fld">Room code (share this)</label>
+      <label class="fld" id="roomLabel">Room code</label>
       <div class="roomline">
         <input id="roomIn" type="text" maxlength="6" placeholder="ABC123" />
         <button class="btn ghost" id="copyBtn" style="margin:0;width:auto;padding:10px 14px;white-space:nowrap;">Copy</button>
@@ -464,6 +492,8 @@ let bots = [];                     // host-owned bot orbs
 let itId='';                       // who is IT
 let botsEnabled=true;              // host fills the arena with AI bots
 let gameMode='classic';           // classic | timer | race | onetagger
+let spectator=false;              // single-screen host: shows whole arena, has no orb of its own
+let roomCode='';                  // current online/single-screen room code
 let tagSeq=0;                      // monotonic-ish sequence for IT changes
 // round state (host-driven, mirrored to clients)
 let itTimerAcc=0;                  // timer mode: seconds since last IT rotation
@@ -498,7 +528,8 @@ function entityById(id){
 }
 // every visible orb this frame
 function getOrbs(){
-  const out=[me], now=performance.now(), seen=new Set([me.id]), host=amHostNow();
+  const out=[], now=performance.now(), seen=new Set(), host=amHostNow();
+  if(me){ out.push(me); seen.add(me.id); }   // single-screen host has no orb
   // de-dup by id; when we're host our own bots[] are authoritative, so ignore any
   // bot orbs arriving from remotes (prevents doubling if a second host briefly exists)
   remotes.forEach(r=>{ if(now-r.lastSeen<STALE_MS && !seen.has(r.id) && !(host && r.isBot)){ out.push(r); seen.add(r.id); } });
@@ -548,7 +579,7 @@ function burst(x,y,color){
     particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,color}); }
 }
 // race mode: zero everyone's score for a fresh round (each client owns its own + host owns bots)
-function applyReset(){ me.score=0; for(const b of bots) b.score=0; winName=''; winUntil=0; winPending=false; }
+function applyReset(){ if(me) me.score=0; for(const b of bots) b.score=0; winName=''; winUntil=0; winPending=false; }
 // host picks a fresh IT and announces it
 function hostAssignIt(){
   const orbs=getOrbs(); if(!orbs.length) return;
@@ -601,7 +632,7 @@ addEventListener('keydown',e=>{
     Net.send({type:'botcfg',enabled:botsEnabled});
     toast('Bots '+(botsEnabled?'ON':'OFF'));
   }
-  if(k==='e' && !e.repeat && running){ emojiPalette.classList.toggle('show'); }
+  if(k==='e' && !e.repeat && running && me){ emojiPalette.classList.toggle('show'); }
 });
 addEventListener('keyup',  e=>{ keys[e.key.toLowerCase()]=false; });
 
@@ -680,14 +711,14 @@ function tick(){
   const t=performance.now(); let dt=(t-lastT)/1000; lastT=t; if(dt>0.05)dt=0.05;
   const now=t;
 
-  // local movement
-  const inp=inputVector();
-  move(me, inp.x, inp.y, dt, itId===myId);
-
-  // local tagging
-  if(itId===myId && now>me.immuneUntil){
-    for(const o of getOrbs()){ if(o.id===myId||now<o.immuneUntil) continue;
-      if(dist2(me.x,me.y,o.x,o.y) < (PLAYER_R*2)*(PLAYER_R*2)){ doTag(myId,o.id); break; } }
+  // local movement + tagging (single-screen host has no orb, so skip)
+  if(me){
+    const inp=inputVector();
+    move(me, inp.x, inp.y, dt, itId===myId);
+    if(itId===myId && now>me.immuneUntil){
+      for(const o of getOrbs()){ if(o.id===myId||now<o.immuneUntil) continue;
+        if(dist2(me.x,me.y,o.x,o.y) < (PLAYER_R*2)*(PLAYER_R*2)){ doTag(myId,o.id); break; } }
+    }
   }
 
   // smooth remotes toward their network positions; snap on big jumps (respawns/teleports)
@@ -735,7 +766,7 @@ function tick(){
   sendAcc+=dt*1000;
   if(sendAcc>=SEND_MS){
     sendAcc=0;
-    Net.send({type:'state',id:myId,name:me.name,color:me.color,emoji:me.emoji,score:me.score,
+    if(me) Net.send({type:'state',id:myId,name:me.name,color:me.color,emoji:me.emoji,score:me.score,
               x:Math.round(me.x),y:Math.round(me.y),vx:me.vx,vy:me.vy});
     if(host && bots.length)
       Net.send({type:'bots',list:bots.map(b=>({id:b.id,name:b.name,color:b.color,emoji:b.emoji,score:Math.round(b.score),x:Math.round(b.x),y:Math.round(b.y)}))});
@@ -757,19 +788,31 @@ addEventListener('resize',resize); resize();
 
 function render(now){
   const W=cv.width,H=cv.height;
-  // camera follows local player, clamped to world
-  cam.x=clamp(me.x-W/2,0,Math.max(0,WORLD.w-W));
-  cam.y=clamp(me.y-H/2,0,Math.max(0,WORLD.h-H));
-
   ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,W,H);
-  ctx.save(); ctx.translate(-cam.x,-cam.y);
+  ctx.save();
+  let vx0,vy0,vx1,vy1;                       // visible world rect (drives the grid)
+  if(spectator){
+    // single-screen host: reserve side columns for the HUD cards and fit the whole
+    // arena into the band between them, so nothing ever overlaps the arena
+    const SIDE=Math.min(236, W*0.28), padV=18;
+    const availW=Math.max(60,W-SIDE*2), availH=Math.max(60,H-padV*2);
+    const sc=Math.min(availW/WORLD.w, availH/WORLD.h);
+    ctx.translate(SIDE+(availW-WORLD.w*sc)/2, padV+(availH-WORLD.h*sc)/2); ctx.scale(sc,sc);
+    vx0=0; vy0=0; vx1=WORLD.w; vy1=WORLD.h;
+  } else {
+    // camera follows the local player, clamped to world
+    cam.x=clamp(me.x-W/2,0,Math.max(0,WORLD.w-W));
+    cam.y=clamp(me.y-H/2,0,Math.max(0,WORLD.h-H));
+    ctx.translate(-cam.x,-cam.y);
+    vx0=cam.x; vy0=cam.y; vx1=cam.x+W; vy1=cam.y+H;
+  }
 
   // grid
   ctx.lineWidth=1; ctx.strokeStyle='rgba(250,250,250,.05)';
-  const g=80, x0=Math.floor(cam.x/g)*g, y0=Math.floor(cam.y/g)*g;
+  const g=80, gx0=Math.floor(vx0/g)*g, gy0=Math.floor(vy0/g)*g;
   ctx.beginPath();
-  for(let x=x0;x<cam.x+W+g;x+=g){ ctx.moveTo(x,cam.y); ctx.lineTo(x,cam.y+H); }
-  for(let y=y0;y<cam.y+H+g;y+=g){ ctx.moveTo(cam.x,y); ctx.lineTo(cam.x+W,y); }
+  for(let x=gx0;x<=vx1+g;x+=g){ ctx.moveTo(x,vy0); ctx.lineTo(x,vy1); }
+  for(let y=gy0;y<=vy1+g;y+=g){ ctx.moveTo(vx0,y); ctx.lineTo(vx1,y); }
   ctx.stroke();
 
   // world border
@@ -800,9 +843,9 @@ function render(now){
     ctx.fillText(f.txt,f.x,f.y); } ctx.globalAlpha=1;
 
   ctx.restore();
-  if(touch.active) drawJoystick();
+  if(!spectator && touch.active) drawJoystick();
   drawHUD(now);
-  drawMini();
+  if(!spectator) drawMini();   // whole arena already visible in single-screen mode
 }
 function drawJoystick(){
   const bx=touch.sx, by=touch.sy, max=70;
@@ -820,7 +863,8 @@ function drawOrb(o,now){
   const isIt=o.id===itId, immune=now<o.immuneUntil;
   // spawn-in pop: scale up + fade in for ~380ms after a (re)spawn
   const age=now-(o.spawnT||0), inT=age<380?age/380:1;
-  const inScale=0.25+0.75*inT, inAlpha=Math.min(1,inT*1.3), R=PLAYER_R*inScale;
+  const inScale=0.25+0.75*inT, inAlpha=Math.min(1,inT*1.3);
+  const R=(spectator?1.8:1)*PLAYER_R*inScale;   // bigger orbs on the zoomed-out host display
   // just the emoji — with a crisp white outline hugging its shape (sticker edge) so it
   // reads on the dark arena without a circle/badge behind it
   const flash = immune && (((now/120)|0)%2===0);
@@ -838,13 +882,13 @@ function drawOrb(o,now){
     ctx.lineWidth=3; ctx.strokeStyle='#ef4444';
     ctx.beginPath(); ctx.arc(o.x,o.y,pr,0,7); ctx.stroke();
     // caret marker pointing down at the IT orb (drawn, not an emoji)
-    const my=o.y-PLAYER_R-9;
+    const my=o.y-R-7;
     ctx.fillStyle='#ef4444'; ctx.beginPath();
     ctx.moveTo(o.x-5,my-5); ctx.lineTo(o.x+5,my-5); ctx.lineTo(o.x,my+2); ctx.closePath(); ctx.fill(); }
   // name + score
-  ctx.font='500 12px Roboto,ui-sans-serif,system-ui'; ctx.textAlign='center';
-  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(o.name,o.x+1,o.y+PLAYER_R+15+1);
-  ctx.fillStyle=o.id===myId?'#fafafa':'#d4d4d4'; ctx.fillText(o.name,o.x,o.y+PLAYER_R+15);
+  ctx.font=(spectator?'600 17px':'500 12px')+' Roboto,ui-sans-serif,system-ui'; ctx.textAlign='center';
+  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(o.name,o.x+1,o.y+R+15+1);
+  ctx.fillStyle=o.id===myId?'#fafafa':'#d4d4d4'; ctx.fillText(o.name,o.x,o.y+R+15);
   ctx.globalAlpha=1;
 }
 
@@ -873,6 +917,14 @@ function setBanner(big,sub,col){
   if(col!==_bCol){ bannerBig.style.color=col; _bCol=col; }
   if(sub!==_bSub){ bannerSub.textContent=sub; _bSub=sub; }
 }
+// single-screen host: live player count on the join panel
+const hostCountEl=document.getElementById('hostCount');
+let _hcount=-1;
+function updateHostInfo(now){
+  let players=0; remotes.forEach(r=>{ if(!r.isBot && now-r.lastSeen<STALE_MS) players++; });
+  if(players!==_hcount){ _hcount=players;
+    hostCountEl.textContent=players+(players===1?' player':' players')+' connected'; }
+}
 function drawHUD(now){
   // scoreboard (rebuild DOM only when something changed)
   const orbs=getOrbs().slice().sort((a,b)=>b.score-a.score).slice(0,6);
@@ -886,6 +938,9 @@ function drawHUD(now){
     }
     boardRows.innerHTML=html;
   }
+
+  // single-screen host: update the big join panel, no player banner
+  if(spectator){ updateHostInfo(now); return; }
 
   // banner
   if(now<winUntil && winName){
@@ -930,6 +985,8 @@ const botsSwitch=document.getElementById('botsSwitch');
 const ruleIn=document.getElementById('ruleIn');
 const ruleHint=document.getElementById('ruleHint');
 const roomIn=document.getElementById('roomIn');
+const roomLabel=document.getElementById('roomLabel');
+const copyBtn=document.getElementById('copyBtn');
 const RULE_HINTS={
   classic:'Catch any orb and they become the new IT. Tagged orbs respawn elsewhere.',
   timer:'IT rotates to a random player every 20s. Rack up tags while you hold it.',
@@ -943,6 +1000,8 @@ const PLAY_HTML=playBtn.innerHTML;
 const lobbyErr=document.getElementById('lobbyErr');
 const statText=document.getElementById('statText');
 const statCode=document.getElementById('statCode');
+const meFields=document.getElementById('meFields');
+const hostInfoEl=document.getElementById('hostInfo');
 
 let chosenColor=pick(COLORS), chosenEmoji=pick(EMOJIS), chosenMode='local';
 nameIn.value='mncoleman';
@@ -952,9 +1011,16 @@ EMOJIS.forEach(e=>{ const b=document.createElement('button'); b.type='button';
   egEl.appendChild(b); });
 modesEl.querySelectorAll('.mode').forEach(m=>{ m.onclick=()=>{
   chosenMode=m.dataset.mode; modesEl.querySelectorAll('.mode').forEach(x=>x.classList.remove('on')); m.classList.add('on');
-  roomWrap.classList.toggle('show',chosenMode==='online');
-  botsWrap.classList.toggle('show',chosenMode!=='solo');
-  if(chosenMode==='online' && !roomIn.value) roomIn.value=randCode();
+  const needsCode = (chosenMode==='online' || chosenMode==='screen');
+  roomWrap.classList.toggle('show', needsCode);
+  botsWrap.classList.toggle('show', chosenMode!=='solo');
+  meFields.style.display = (chosenMode==='screen') ? 'none' : '';   // single-screen host has no orb
+  if(chosenMode==='screen'){                 // host: generate a code to share
+    if(!roomIn.value) roomIn.value=randCode();
+    roomLabel.textContent='Room code (share this)'; copyBtn.style.display='';
+  } else if(chosenMode==='online'){          // join: type the host's code
+    roomIn.value=''; roomLabel.textContent='Enter the room code to join'; copyBtn.style.display='none';
+  }
 };});
 botsWrap.classList.toggle('show',chosenMode!=='solo');   // initial (default mode = local)
 botsSwitch.onclick=()=>{ const on=!botsSwitch.classList.contains('on');
@@ -965,27 +1031,44 @@ nameIn.addEventListener('keydown',e=>{ if(e.key==='Enter') playBtn.click(); });
 
 playBtn.onclick=async()=>{
   lobbyErr.textContent='';
+  spectator = (chosenMode==='screen');
   myId='p_'+Date.now().toString(36)+'_'+(Math.random()*1e6|0).toString(36);
-  me=makeOrb(myId,(nameIn.value.trim()||'Player').slice(0,14),chosenColor,chosenEmoji,false);
-  emojiBtn.textContent=me.emoji;
   botsEnabled = chosenMode==='solo' ? true : botsSwitch.classList.contains('on');
   gameMode = ruleIn.value;
 
-  try{
-    if(chosenMode==='solo'){ Net.startSolo(); statText.textContent='solo + bots'; }
-    else if(chosenMode==='local'){ Net.startLocal(); statText.textContent='local network (this device)'; }
-    else { const room=(roomIn.value.trim()||randCode()).toUpperCase(); roomIn.value=room;
-      playBtn.textContent='Connecting…'; playBtn.disabled=true;
-      await Net.startOnline(room);
-      statText.textContent='online room';
-      statCode.innerHTML='room <span class="code">'+escapeHtml(room)+'</span>'+
-        '<button id="copyRoom" class="copybtn" title="Copy room code">Copy</button>';
-      const cr=document.getElementById('copyRoom');
-      cr.onclick=async()=>{ try{ await navigator.clipboard.writeText(room); cr.textContent='Copied';
-        setTimeout(()=>cr.textContent='Copy',1200); }catch(e){ cr.textContent='—'; } };
+  if(spectator){
+    // single-screen host: become the room host with no orb, show the whole arena + join code
+    me=null;
+    const room=(roomIn.value.trim()||randCode()).toUpperCase(); roomIn.value=room; roomCode=room;
+    playBtn.textContent='Starting…'; playBtn.disabled=true;
+    try{ await Net.startOnline(room); }
+    catch(err){ lobbyErr.textContent=err.message||'Could not start the room.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; return; }
+    if(!Net.amHost){ lobbyErr.textContent='That code is already in use — pick another.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; spectator=false; return; }
+    document.body.classList.add('spectator');
+    document.getElementById('hostCode').textContent=room;
+    hostInfoEl.classList.add('show');
+    emojiBtn.style.display='none';
+    document.getElementById('hint').style.display='none';
+    document.getElementById('banner').style.display='none';
+  } else {
+    me=makeOrb(myId,(nameIn.value.trim()||'Player').slice(0,14),chosenColor,chosenEmoji,false);
+    emojiBtn.textContent=me.emoji;
+    try{
+      if(chosenMode==='solo'){ Net.startSolo(); statText.textContent='solo + bots'; }
+      else if(chosenMode==='local'){ Net.startLocal(); statText.textContent='local network (this device)'; }
+      else { const room=(roomIn.value.trim()||randCode()).toUpperCase(); roomIn.value=room; roomCode=room;
+        playBtn.textContent='Connecting…'; playBtn.disabled=true;
+        await Net.startOnline(room);
+        statText.textContent='online room';
+        statCode.innerHTML='room <span class="code">'+escapeHtml(room)+'</span>'+
+          '<button id="copyRoom" class="copybtn" title="Copy room code">Copy</button>';
+        const cr=document.getElementById('copyRoom');
+        cr.onclick=async()=>{ try{ await navigator.clipboard.writeText(room); cr.textContent='Copied';
+          setTimeout(()=>cr.textContent='Copy',1200); }catch(e){ cr.textContent='—'; } };
+      }
+    }catch(err){
+      lobbyErr.textContent=err.message||'Connection failed.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; return;
     }
-  }catch(err){
-    lobbyErr.textContent=err.message||'Connection failed.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; return;
   }
 
   lobby.style.display='none';
