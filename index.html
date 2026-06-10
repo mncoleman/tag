@@ -144,11 +144,12 @@
   #joinSection{border:1px solid var(--line);border-radius:14px;padding:13px;margin-top:10px;
     background:rgba(250,250,250,.04);}
   #joinSection .fld{margin-top:0;}
-  .joinRow{display:flex;gap:8px;}
-  .joinRow input{flex:1;text-transform:uppercase;letter-spacing:.16em;font-weight:700;font-size:16px;
-    width:auto;background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px 12px;outline:none;}
+  .joinRow{display:flex;gap:8px;align-items:stretch;}
+  .joinRow input{flex:1 1 auto;min-width:0;text-transform:uppercase;letter-spacing:.12em;font-weight:700;font-size:16px;
+    background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px 12px;outline:none;}
   .joinRow input:focus{border-color:var(--accent);}
-  #joinBtn{margin-top:0;width:auto;flex:0 0 auto;padding:0 24px;font-size:15px;}
+  .joinRow input::placeholder{letter-spacing:.1em;}
+  #joinBtn{margin-top:0;width:auto;flex:0 0 auto;padding:0 22px;font-size:15px;}
   .joinHint{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.4;}
   .orRow{display:flex;align-items:center;gap:12px;margin:18px 2px 6px;color:var(--dim);font-size:10.5px;
     letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;}
@@ -307,6 +308,10 @@
       <div class="mode" data-mode="solo">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M9 13h.01M15 13h.01M9.5 16h5"/><path d="M12 8V4.5M9 4.5h6"/></svg></div>
         <div><div class="t">Solo + bots</div><div class="d">Practice against AI orbs. No networking.</div></div>
+      </div>
+      <div class="mode" data-mode="online">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.4a3.2 3.2 0 0 1 0 5.2M20.5 19a5.5 5.5 0 0 0-3.8-5.2"/></svg></div>
+        <div><div class="t">Multiplayer room</div><div class="d">Create a room and play — this computer is one of the players. Share the code so others can join.</div></div>
       </div>
       <div class="mode" data-mode="screen">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
@@ -1035,10 +1040,11 @@ EMOJIS.forEach(e=>{ const b=document.createElement('button'); b.type='button';
   egEl.appendChild(b); });
 modesEl.querySelectorAll('.mode').forEach(m=>{ m.onclick=()=>{
   chosenMode=m.dataset.mode; modesEl.querySelectorAll('.mode').forEach(x=>x.classList.remove('on')); m.classList.add('on');
-  roomWrap.classList.toggle('show', chosenMode==='screen');   // host shares the generated code
+  const needsCode = (chosenMode==='online' || chosenMode==='screen');   // both CREATE a room to share
+  roomWrap.classList.toggle('show', needsCode);
   botsWrap.classList.toggle('show', chosenMode!=='solo');
-  meFields.style.display = (chosenMode==='screen') ? 'none' : '';   // single-screen host has no orb
-  if(chosenMode==='screen'){
+  meFields.style.display = (chosenMode==='screen') ? 'none' : '';   // only single-screen host has no orb
+  if(needsCode){
     if(!roomIn.value) roomIn.value=randCode();
     roomLabel.textContent='Room code (share this)'; copyBtn.style.display='';
   }
