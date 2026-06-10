@@ -54,7 +54,9 @@
   #hostInfo .hi-code{font-size:28px;font-weight:800;letter-spacing:.13em;color:var(--accent);line-height:1.1;margin:1px 0 4px;}
   #hostInfo .hi-sub{font-size:11.5px;color:var(--dim);}
   #hostInfo .hi-sub b{color:var(--txt);font-weight:700;}
-  #hostInfo .hi-count{margin-top:7px;font-size:12px;color:var(--txt);font-weight:700;}
+  #hostInfo #hostQr{display:none;width:152px;height:152px;margin:9px auto 7px;border-radius:10px;
+    background:#fff;padding:8px;box-sizing:border-box;image-rendering:pixelated;}
+  #hostInfo .hi-count{margin-top:5px;font-size:12px;color:var(--txt);font-weight:700;}
   @media (max-width:640px){ #hostInfo .hi-code{font-size:23px;} #hostInfo{padding:9px 16px;} }
   #banner .sub{font-size:12px;color:var(--dim);margin-top:2px;}
 
@@ -139,6 +141,18 @@
   select:focus{border-color:var(--accent);}
   select option{background:#171717;color:var(--txt);}
   .ruleHint{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.4;min-height:16px;}
+  #joinSection{border:1px solid var(--line);border-radius:14px;padding:13px;margin-top:10px;
+    background:rgba(250,250,250,.04);}
+  #joinSection .fld{margin-top:0;}
+  .joinRow{display:flex;gap:8px;}
+  .joinRow input{flex:1;text-transform:uppercase;letter-spacing:.16em;font-weight:700;font-size:16px;
+    width:auto;background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px 12px;outline:none;}
+  .joinRow input:focus{border-color:var(--accent);}
+  #joinBtn{margin-top:0;width:auto;flex:0 0 auto;padding:0 24px;font-size:15px;}
+  .joinHint{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.4;}
+  .orRow{display:flex;align-items:center;gap:12px;margin:18px 2px 6px;color:var(--dim);font-size:10.5px;
+    letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;}
+  .orRow::before,.orRow::after{content:"";flex:1;height:1px;background:var(--line);}
   .emojiGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;max-height:140px;overflow-y:auto;
     padding:6px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.2);}
   .eopt{font-size:20px;line-height:1;background:transparent;border:1px solid transparent;border-radius:8px;
@@ -225,7 +239,8 @@
 <div id="hostInfo" class="hud">
   <div class="hi-label">Join the game</div>
   <div class="hi-code" id="hostCode">----</div>
-  <div class="hi-sub">on your phone open <b>tag.mncoleman.com</b>, tap <b>Join a room</b>, enter this code</div>
+  <img id="hostQr" alt="Scan to join" />
+  <div class="hi-sub">scan the code, or open <b>tag.mncoleman.com</b> → <b>Join a room</b> → enter the code</div>
   <div class="hi-count" id="hostCount">0 players connected</div>
 </div>
 <div id="status" class="hud">
@@ -272,6 +287,17 @@
       <div class="emojiGrid" id="emojiGrid"></div>
     </div>
 
+    <div id="joinSection">
+      <label class="fld">Join a room</label>
+      <div class="joinRow">
+        <input id="joinCodeIn" type="text" maxlength="6" placeholder="ENTER CODE" autocomplete="off" />
+        <button class="btn" id="joinBtn">Join</button>
+      </div>
+      <div class="joinHint">Have a code from a single-screen host or a friend? Jump straight into their arena.</div>
+    </div>
+
+    <div class="orRow"><span>or start a new game</span></div>
+
     <label class="fld">Mode</label>
     <div class="modes" id="modes">
       <div class="mode on" data-mode="local">
@@ -281,10 +307,6 @@
       <div class="mode" data-mode="solo">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M9 13h.01M15 13h.01M9.5 16h5"/><path d="M12 8V4.5M9 4.5h6"/></svg></div>
         <div><div class="t">Solo + bots</div><div class="d">Practice against AI orbs. No networking.</div></div>
-      </div>
-      <div class="mode" data-mode="online">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></div>
-        <div><div class="t">Join a room</div><div class="d">Enter a room code to join a game on another device — including a single-screen host. Or type a new code to start your own.</div></div>
       </div>
       <div class="mode" data-mode="screen">
         <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
@@ -1002,6 +1024,8 @@ const statText=document.getElementById('statText');
 const statCode=document.getElementById('statCode');
 const meFields=document.getElementById('meFields');
 const hostInfoEl=document.getElementById('hostInfo');
+const joinCodeIn=document.getElementById('joinCodeIn');
+const joinBtn=document.getElementById('joinBtn');
 
 let chosenColor=pick(COLORS), chosenEmoji=pick(EMOJIS), chosenMode='local';
 nameIn.value='mncoleman';
@@ -1011,23 +1035,44 @@ EMOJIS.forEach(e=>{ const b=document.createElement('button'); b.type='button';
   egEl.appendChild(b); });
 modesEl.querySelectorAll('.mode').forEach(m=>{ m.onclick=()=>{
   chosenMode=m.dataset.mode; modesEl.querySelectorAll('.mode').forEach(x=>x.classList.remove('on')); m.classList.add('on');
-  const needsCode = (chosenMode==='online' || chosenMode==='screen');
-  roomWrap.classList.toggle('show', needsCode);
+  roomWrap.classList.toggle('show', chosenMode==='screen');   // host shares the generated code
   botsWrap.classList.toggle('show', chosenMode!=='solo');
   meFields.style.display = (chosenMode==='screen') ? 'none' : '';   // single-screen host has no orb
-  if(chosenMode==='screen'){                 // host: generate a code to share
+  if(chosenMode==='screen'){
     if(!roomIn.value) roomIn.value=randCode();
     roomLabel.textContent='Room code (share this)'; copyBtn.style.display='';
-  } else if(chosenMode==='online'){          // join: type the host's code
-    roomIn.value=''; roomLabel.textContent='Enter the room code to join'; copyBtn.style.display='none';
   }
 };});
+
+// prominent Join-a-room action (its own input, no mode card needed)
+joinBtn.onclick=()=>{
+  const code=joinCodeIn.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(code.length<3){ lobbyErr.textContent='Enter a room code to join.'; joinCodeIn.focus(); return; }
+  lobbyErr.textContent=''; meFields.style.display='';   // joiners are players (need name/orb)
+  chosenMode='online'; roomIn.value=code;
+  playBtn.click();
+};
+joinCodeIn.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); joinBtn.click(); } });
 botsWrap.classList.toggle('show',chosenMode!=='solo');   // initial (default mode = local)
 botsSwitch.onclick=()=>{ const on=!botsSwitch.classList.contains('on');
   botsSwitch.classList.toggle('on',on); botsSwitch.setAttribute('aria-checked',on); };
 document.getElementById('copyBtn').onclick=async()=>{ try{ await navigator.clipboard.writeText(roomIn.value); document.getElementById('copyBtn').textContent='Copied'; setTimeout(()=>document.getElementById('copyBtn').textContent='Copy',1200);}catch(e){} };
 function randCode(){ const s='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let r=''; for(let i=0;i<6;i++) r+=s[(Math.random()*s.length)|0]; return r; }
 nameIn.addEventListener('keydown',e=>{ if(e.key==='Enter') playBtn.click(); });
+
+// lazy-load a tiny QR generator (host display only)
+function loadQR(){ return new Promise((res,rej)=>{ if(window.qrcode) return res();
+  const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
+  s.onload=()=>res(); s.onerror=()=>rej(new Error('qr load failed')); document.head.appendChild(s); }); }
+function showHostQR(room){
+  const url=location.origin+location.pathname+'?room='+room;
+  loadQR().then(()=>{ const qr=qrcode(0,'M'); qr.addData(url); qr.make();
+    const img=document.getElementById('hostQr'); img.src=qr.createDataURL(6,8); img.style.display='block';
+  }).catch(()=>{});
+}
+// deep-link from a scanned QR: ?room=CODE pre-fills the Join box
+(()=>{ const r=(new URLSearchParams(location.search).get('room')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+  if(r){ joinCodeIn.value=r; try{ joinCodeIn.scrollIntoView({block:'center'}); }catch(e){} } })();
 
 playBtn.onclick=async()=>{
   lobbyErr.textContent='';
@@ -1047,6 +1092,7 @@ playBtn.onclick=async()=>{
     document.body.classList.add('spectator');
     document.getElementById('hostCode').textContent=room;
     hostInfoEl.classList.add('show');
+    showHostQR(room);
     emojiBtn.style.display='none';
     document.getElementById('hint').style.display='none';
     document.getElementById('banner').style.display='none';
