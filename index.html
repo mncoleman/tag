@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Orb Tag · mncoleman</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23fafafa'/><text x='16' y='24' font-size='21' font-weight='800' text-anchor='middle' fill='%230a0a0a' font-family='Roboto,sans-serif'>m</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" />
+<style>
+  :root{
+    /* mncoleman.com brand kit — minimalist monochrome, Roboto */
+    --bg:#0a0a0a; --panel:rgba(23,23,23,.82); --line:rgba(250,250,250,.12);
+    --txt:#fafafa; --dim:#a3a3a3; --accent:#fafafa; --accent-ink:#0a0a0a;
+    --surface:#262626; --it:#ef4444; --good:#fafafa;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font-family:'Roboto',ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;overscroll-behavior:none;}
+  #cv{display:block;position:fixed;inset:0;touch-action:none;}
+
+  /* ---------- HUD ---------- */
+  .hud{position:fixed;pointer-events:none;z-index:5;}
+  #board{top:14px;left:14px;min-width:190px;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:10px 12px;backdrop-filter:blur(8px);}
+  #board h3{margin:0 0 8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);}
+  .row{display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;}
+  .row .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 8px currentColor;}
+  .row .oe{font-size:15px;line-height:1;flex:0 0 auto;width:18px;text-align:center;
+    font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;}
+  .row .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .row .sc{font-variant-numeric:tabular-nums;font-weight:700;color:#fff;}
+  .row.me .nm{font-weight:700;}
+  .fire{color:var(--it);display:inline-flex;vertical-align:middle;}
+  .fire svg{width:11px;height:11px;}
+
+  #banner{top:14px;left:50%;transform:translateX(-50%);text-align:center;}
+  #banner .big{font-size:20px;font-weight:700;letter-spacing:.01em;
+    text-shadow:0 2px 18px rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;gap:8px;}
+  #banner .big svg{width:19px;height:19px;}
+  #banner .sub{font-size:12px;color:var(--dim);margin-top:2px;}
+
+  #status{top:14px;right:14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;padding:8px 11px;font-size:12px;backdrop-filter:blur(8px);text-align:right;}
+  #status .pill{display:inline-flex;align-items:center;gap:6px;}
+  #status .led{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good);}
+  #status .muted{color:var(--dim);}
+  #status .code{font-weight:700;letter-spacing:.18em;color:var(--accent);}
+  #status .copybtn{pointer-events:auto;cursor:pointer;margin-left:7px;border:1px solid var(--line);
+    background:rgba(250,250,250,.06);color:var(--txt);border-radius:6px;padding:2px 9px;font-size:11px;
+    font-weight:600;font-family:inherit;vertical-align:middle;transition:background .12s;}
+  #status .copybtn:hover{background:rgba(250,250,250,.14);}
+
+  #hint{bottom:14px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--dim);
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 12px;backdrop-filter:blur(8px);}
+
+  #toast{top:64px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;opacity:0;transition:opacity .2s;backdrop-filter:blur(8px);}
+  #toast.show{opacity:1;}
+
+  /* in-game emoji picker */
+  #emojiBtn{bottom:44px;left:14px;pointer-events:auto;cursor:pointer;width:42px;height:42px;border-radius:11px;
+    border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(8px);font-size:22px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;}
+  #emojiBtn:hover{border-color:var(--accent);}
+  #emojiPalette{bottom:94px;left:14px;pointer-events:auto;display:none;width:270px;flex-wrap:wrap;gap:5px;
+    padding:9px;border:1px solid var(--line);border-radius:12px;background:var(--panel);backdrop-filter:blur(10px);
+    max-height:210px;overflow-y:auto;box-shadow:0 14px 40px rgba(0,0,0,.5);}
+  #emojiPalette.show{display:flex;}
+  #emojiPalette button{font-size:20px;line-height:1;width:30px;height:30px;border:1px solid transparent;
+    border-radius:7px;background:transparent;cursor:pointer;
+    font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;}
+  #emojiPalette button:hover{background:rgba(255,255,255,.08);}
+
+  /* mncoleman branding */
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .brand .logo{width:30px;height:30px;border-radius:7px;background:var(--accent);
+    display:flex;align-items:center;justify-content:center;color:var(--accent-ink);font-weight:700;font-size:15px;}
+  .brand .wm{font-weight:500;font-size:14px;letter-spacing:.01em;color:var(--dim);}
+  .brand .wm b{color:var(--txt);font-weight:700;}
+  .brand .sep{flex:1;}
+  .brand .by{font-size:10px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase;}
+  #credit{bottom:14px;left:14px;display:flex;align-items:center;gap:7px;font-size:11px;color:var(--dim);
+    letter-spacing:.04em;opacity:.7;}
+  #credit .logo{width:17px;height:17px;border-radius:4px;background:var(--accent);
+    display:inline-flex;align-items:center;justify-content:center;color:var(--accent-ink);font-weight:700;font-size:11px;}
+  #credit b{color:var(--txt);font-weight:700;}
+
+  #mini{display:block;bottom:14px;right:14px;top:auto;left:auto;border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;background:rgba(10,10,10,.7);}
+
+  /* activity feed (kill-feed) — top-left under the scoreboard, newest on top, older fades */
+  #feed{top:200px;left:14px;width:272px;max-height:calc(100vh - 320px);overflow:hidden;
+    display:flex;flex-direction:column;gap:4px;}
+  #feed .ev{font-size:12px;line-height:1.35;color:#c8c8c8;background:rgba(18,18,18,.82);
+    border:1px solid var(--line);border-radius:8px;padding:4px 9px;backdrop-filter:blur(6px);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:evlife 9s ease forwards;}
+  #feed .ev b{color:var(--txt);font-weight:600;}
+  #feed .ev .it{color:var(--it);font-weight:600;}
+  #feed .ev .ev-e{font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;}
+  @keyframes evlife{ 0%{opacity:0;transform:translateY(-5px);} 4%{opacity:1;transform:none;}
+    70%{opacity:1;} 100%{opacity:0;} }
+
+  /* ---------- Lobby ---------- */
+  #lobby{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 0;
+    background:radial-gradient(1100px 650px at 50% -10%,rgba(250,250,250,.06),transparent),var(--bg);}
+  .card{width:min(440px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    padding:26px 24px;backdrop-filter:blur(14px);box-shadow:0 30px 80px rgba(0,0,0,.5);}
+  .card h1{margin:0 0 2px;font-size:28px;letter-spacing:-.5px;}
+  .card h1 span{color:var(--accent);}
+  .card p.tag{margin:0 0 18px;color:var(--dim);font-size:13px;}
+  label.fld{display:block;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px;}
+  input[type=text]{width:100%;background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:11px 12px;font-size:15px;outline:none;}
+  input[type=text]:focus{border-color:var(--accent);}
+  select{width:100%;background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:11px 12px;font-size:14px;outline:none;font-family:inherit;cursor:pointer;}
+  select:focus{border-color:var(--accent);}
+  select option{background:#171717;color:var(--txt);}
+  .ruleHint{font-size:11.5px;color:var(--dim);margin-top:6px;line-height:1.4;min-height:16px;}
+  .emojiGrid{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;max-height:140px;overflow-y:auto;
+    padding:6px;border:1px solid var(--line);border-radius:10px;background:rgba(0,0,0,.2);}
+  .eopt{font-size:20px;line-height:1;background:transparent;border:1px solid transparent;border-radius:8px;
+    padding:6px 0;cursor:pointer;transition:background .1s,border-color .1s;
+    font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;}
+  .eopt:hover{background:rgba(255,255,255,.06);}
+  .eopt.on{border-color:var(--accent);background:rgba(250,250,250,.1);}
+  .modes{display:grid;grid-template-columns:1fr;gap:8px;}
+  .mode{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;
+    padding:11px 12px;cursor:pointer;transition:border-color .12s,background .12s;}
+  .mode.on{border-color:var(--accent);background:rgba(250,250,250,.06);}
+  .mode .t{font-weight:700;font-size:14px;}
+  .mode .d{font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.35;}
+  .mode .ic{color:var(--txt);display:flex;align-items:center;padding-top:1px;}
+  .mode .ic svg{width:20px;height:20px;}
+  .toggleRow{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-top:8px;}
+  .toggleRow .t{font-weight:700;font-size:14px;}
+  .toggleRow .d{font-size:11.5px;color:var(--dim);margin-top:2px;line-height:1.35;}
+  .switch{position:relative;width:46px;height:26px;flex:0 0 auto;border-radius:20px;
+    background:rgba(255,255,255,.12);cursor:pointer;transition:background .15s;}
+  .switch.on{background:var(--accent);}
+  .switch .knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.4);transition:left .15s;}
+  .switch.on .knob{left:23px;}
+  #botsWrap{display:none;} #botsWrap.show{display:block;}
+  #roomWrap{display:none;margin-top:10px;}
+  #roomWrap.show{display:block;}
+  .roomline{display:flex;gap:8px;}
+  .roomline input{text-transform:uppercase;letter-spacing:.18em;font-weight:700;}
+  .btn{margin-top:18px;width:100%;border:none;border-radius:10px;padding:14px;font-size:16px;font-weight:700;
+    letter-spacing:.01em;cursor:pointer;color:var(--accent-ink);background:var(--accent);
+    box-shadow:0 8px 24px rgba(0,0,0,.45);transition:transform .08s,opacity .12s;}
+  .btn:hover{opacity:.9;} .btn:active{transform:translateY(1px);}
+  .btn svg{width:13px;height:13px;vertical-align:-1px;margin-left:5px;}
+  .btn.ghost{background:rgba(255,255,255,.07);color:var(--txt);box-shadow:none;margin-top:8px;padding:10px;font-size:13px;font-weight:600;}
+  .note{margin-top:14px;font-size:11px;color:var(--dim);line-height:1.5;}
+  .err{color:var(--it);font-size:12px;margin-top:8px;min-height:14px;}
+  /* ---------- Refresh / close warning modal ---------- */
+  .modal-overlay{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;
+    padding:20px;background:rgba(5,5,5,.74);backdrop-filter:blur(6px);}
+  .modal-overlay.show{display:flex;}
+  .modal-card{width:min(400px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:18px;
+    padding:24px;backdrop-filter:blur(14px);box-shadow:0 30px 80px rgba(0,0,0,.6);}
+  .modal-card h2{margin:6px 0 6px;font-size:20px;}
+  .modal-card p{margin:0 0 18px;color:var(--dim);font-size:13.5px;line-height:1.5;}
+  .modal-actions{display:flex;gap:10px;}
+  .modal-actions .btn{margin-top:0;flex:1;}
+  .btn.danger{background:var(--it);color:#fff;box-shadow:0 8px 24px rgba(239,68,68,.28);}
+
+  /* ---------- Mobile (portrait + landscape) ---------- */
+  @media (max-width:640px){
+    #board{min-width:0;max-width:46vw;padding:8px 9px;}
+    #board h3{font-size:9px;margin-bottom:5px;}
+    .row{font-size:11px;gap:6px;padding:2px 0;}
+    .row .oe{font-size:13px;width:15px;}
+    #banner .big{font-size:15px;gap:6px;} #banner .big svg{width:15px;height:15px;} #banner .sub{font-size:10px;}
+    #status{font-size:10px;padding:6px 8px;}
+    #status .copybtn{padding:2px 7px;font-size:10px;}
+    #hint{display:none;}
+    #feed{top:auto;bottom:120px;left:8px;width:min(64vw,240px);max-height:34vh;}
+    #feed .ev{font-size:11px;padding:3px 8px;}
+    #emojiBtn{width:38px;height:38px;bottom:62px;left:8px;font-size:18px;}
+    #emojiPalette{bottom:106px;left:8px;width:min(86vw,270px);}
+    #credit{bottom:8px;left:8px;font-size:10px;}
+    .card{padding:20px 16px;}
+    .card h1{font-size:24px;}
+    .emojiGrid{grid-template-columns:repeat(6,1fr);}
+  }
+  /* very small / landscape phones: keep things compact and clear of the arena edges */
+  @media (max-width:480px){ #board{max-width:42vw;} #mini{display:none;} }
+  @media (max-height:760px){ #lobby{align-items:flex-start;} }
+  @media (orientation:landscape) and (max-height:480px){
+    #feed{bottom:96px;max-height:42vh;} #emojiBtn{bottom:50px;} #emojiPalette{bottom:92px;}
+  }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<!-- HUD -->
+<div id="board" class="hud"><h3>Scoreboard</h3><div id="boardRows"></div></div>
+<div id="feed" class="hud"></div>
+<div id="banner" class="hud"><div class="big" id="bannerBig"></div><div class="sub" id="bannerSub"></div></div>
+<div id="status" class="hud">
+  <div class="pill"><span class="led"></span><span id="statText" class="muted">solo</span></div>
+  <div id="statCode" style="margin-top:4px"></div>
+</div>
+<div id="hint" class="hud">Move: <b>WASD</b> / <b>Arrows</b> · tag while you're <b style="color:var(--it)">IT</b> · <b>E</b> change orb · <b>B</b> toggle bots</div>
+<div id="toast" class="hud"></div>
+<button id="emojiBtn" class="hud" title="Change your orb (E)"></button>
+<div id="emojiPalette" class="hud"></div>
+<div id="credit" class="hud"><span class="logo">m</span><span><b>mn</b>coleman</span></div>
+
+<!-- Refresh / close warning -->
+<div id="leaveModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="brand"><div class="logo">m</div><div class="wm"><b>mn</b>coleman</div><div class="sep"></div><div class="by">orb tag</div></div>
+    <h2>Leave the game?</h2>
+    <p>You're in an active match. Refreshing or closing this window will drop you from the game and reset your score.</p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="stayBtn">Stay in game</button>
+      <button class="btn danger" id="leaveBtn">Leave anyway</button>
+    </div>
+  </div>
+</div>
+<canvas id="mini" class="hud" width="180" height="120"></canvas>
+
+<!-- Lobby -->
+<div id="lobby">
+  <div class="card">
+    <div class="brand">
+      <div class="logo">m</div>
+      <div class="wm"><b>mn</b>coleman</div>
+      <div class="sep"></div>
+      <div class="by">arcade</div>
+    </div>
+    <h1>Orb <span>Tag</span></h1>
+    <p class="tag">Top-down chase through the obstacle arena. Catch others while you're IT to score.</p>
+
+    <label class="fld">Your name</label>
+    <input id="nameIn" type="text" maxlength="14" placeholder="Player" />
+
+    <label class="fld">Your orb</label>
+    <div class="emojiGrid" id="emojiGrid"></div>
+
+    <label class="fld">Mode</label>
+    <div class="modes" id="modes">
+      <div class="mode on" data-mode="local">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a14 14 0 0 1 20 0"/><path d="M5 12a9 9 0 0 1 14 0"/><path d="M8.5 15.5a4 4 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg></div>
+        <div><div class="t">Local auto-join</div><div class="d">Open this file in more tabs/windows on this computer — they join instantly. Best for couch demos.</div></div>
+      </div>
+      <div class="mode" data-mode="solo">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="2"/><path d="M9 13h.01M15 13h.01M9.5 16h5"/><path d="M12 8V4.5M9 4.5h6"/></svg></div>
+        <div><div class="t">Solo + bots</div><div class="d">Practice against AI orbs. No networking.</div></div>
+      </div>
+      <div class="mode" data-mode="online">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
+        <div><div class="t">Online room</div><div class="d">Share a room code to play across different devices / networks (uses an internet relay).</div></div>
+      </div>
+    </div>
+
+    <label class="fld">Tag rules</label>
+    <select id="ruleIn">
+      <option value="classic">Tagged becomes IT (classic)</option>
+      <option value="timer">Timer — IT switches every 20s</option>
+      <option value="race">Race to 10 tags</option>
+      <option value="onetagger">One tagger (hunt for points)</option>
+    </select>
+    <div class="ruleHint" id="ruleHint"></div>
+
+    <div id="botsWrap">
+      <div class="toggleRow">
+        <div><div class="t">Fill with bots</div><div class="d">Add AI orbs so the arena isn't empty. The host controls this; toggle anytime in-game with <b>B</b>.</div></div>
+        <div class="switch on" id="botsSwitch" role="switch" aria-checked="true"><div class="knob"></div></div>
+      </div>
+    </div>
+
+    <div id="roomWrap">
+      <label class="fld">Room code (share this)</label>
+      <div class="roomline">
+        <input id="roomIn" type="text" maxlength="6" placeholder="ABC123" />
+        <button class="btn ghost" id="copyBtn" style="margin:0;width:auto;padding:10px 14px;white-space:nowrap;">Copy</button>
+      </div>
+    </div>
+
+    <button class="btn" id="playBtn">Play <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+    <div class="err" id="lobbyErr"></div>
+    <div class="note">Tip: in <b>Local auto-join</b>, just duplicate the browser tab to add a player. Bots fill empty arenas automatically.</div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   ORB TAG — single-file top-down multiplayer tag in an obstacle course
+   Transports:  solo (none) · local (BroadcastChannel) · online (PeerJS relay)
+   Model: every client owns its own orb & score and broadcasts it.
+          One "host" (lowest id / room creator) simulates bots & assigns IT.
+   ========================================================================= */
+'use strict';
+
+// ---------- constants ----------
+const WORLD = { w: 2400, h: 1600 };
+const PLAYER_R   = 16;
+const MAXSPEED   = 330;      // px/s
+const IT_BONUS   = 1.13;     // the IT orb is a touch faster
+const RESP       = 11;       // velocity responsiveness
+const IMMUNE_MS  = 1600;     // grace after becoming IT
+const TAG_POINTS = 100;
+const STALE_MS   = 3000;     // drop a remote we haven't heard from
+const SEND_MS    = 50;       // 20 Hz state broadcast
+const BOT_COUNT  = 4;
+const COLORS = ['#5ce1ff','#ff6ad5','#ffd34e','#6affc0','#a78bfa','#ff8a5b','#5ad1ff','#9dff5a','#ff5e8a','#7cf0ff'];
+const NAMES  = ['Zap','Nova','Bolt','Echo','Pixel','Vex','Juno','Kilo','Riff','Onyx','Sable','Wisp'];
+// orb avatars — render as Apple emoji on Apple devices via the font stack
+const EMOJIS = ['😀','😎','🤖','👾','😺','🐶','🦊','🐸','🐵','🦄','🐙','🐢','🦖','🐝','🦋','⭐',
+                '🔥','💧','🍕','🎮','👻','💀','🤡','🎃','🌮','🐧','🐼','🦔','🦦','🦀','🐳','🚀'];
+const EMOJI_FONT='28px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+
+// Hand-built obstacle course (walls are the world bounds; these are interior).
+const obstacles = [
+  {x:300,y:300,w:120,h:120}, {x:700,y:200,w:60,h:380}, {x:1100,y:380,w:300,h:60},
+  {x:1700,y:250,w:60,h:400}, {x:2000,y:300,w:140,h:140}, {x:480,y:760,w:380,h:60},
+  {x:1180,y:760,w:120,h:120}, {x:1500,y:820,w:60,h:340}, {x:300,y:1150,w:60,h:300},
+  {x:560,y:1200,w:300,h:60}, {x:980,y:1180,w:340,h:60}, {x:1700,y:1150,w:380,h:60},
+  {x:2080,y:820,w:60,h:340}, {x:860,y:380,w:60,h:240}, {x:1900,y:760,w:140,h:140},
+  {x:1320,y:1040,w:60,h:260},
+];
+
+// ---------- helpers ----------
+const clamp = (v,a,b)=> v<a?a : v>b?b : v;
+const rand  = (a,b)=> a + Math.random()*(b-a);
+const pick  = a => a[(Math.random()*a.length)|0];
+const dist2 = (ax,ay,bx,by)=>{const dx=ax-bx,dy=ay-by;return dx*dx+dy*dy;};
+
+function collidesAny(x,y,r){
+  if(x<r||y<r||x>WORLD.w-r||y>WORLD.h-r) return true;
+  for(const o of obstacles){
+    const cx=clamp(x,o.x,o.x+o.w), cy=clamp(y,o.y,o.y+o.h);
+    if(dist2(x,y,cx,cy) < r*r) return true;
+  }
+  return false;
+}
+function randomSpawn(){
+  for(let i=0;i<300;i++){
+    const x=rand(60,WORLD.w-60), y=rand(60,WORLD.h-60);
+    if(!collidesAny(x,y,PLAYER_R+10)) return {x,y};
+  }
+  return {x:WORLD.w/2,y:WORLD.h/2};
+}
+function resolveCollisions(e){
+  e.x=clamp(e.x,PLAYER_R,WORLD.w-PLAYER_R);
+  e.y=clamp(e.y,PLAYER_R,WORLD.h-PLAYER_R);
+  for(const o of obstacles){
+    // center inside rect → eject along the shallowest axis
+    if(e.x>o.x && e.x<o.x+o.w && e.y>o.y && e.y<o.y+o.h){
+      const dl=e.x-o.x, dr=o.x+o.w-e.x, dt=e.y-o.y, db=o.y+o.h-e.y;
+      const m=Math.min(dl,dr,dt,db);
+      if(m===dl){e.x=o.x-PLAYER_R;e.vx=Math.min(0,e.vx);}
+      else if(m===dr){e.x=o.x+o.w+PLAYER_R;e.vx=Math.max(0,e.vx);}
+      else if(m===dt){e.y=o.y-PLAYER_R;e.vy=Math.min(0,e.vy);}
+      else {e.y=o.y+o.h+PLAYER_R;e.vy=Math.max(0,e.vy);}
+      continue;
+    }
+    const cx=clamp(e.x,o.x,o.x+o.w), cy=clamp(e.y,o.y,o.y+o.h);
+    const dx=e.x-cx, dy=e.y-cy, d2=dx*dx+dy*dy;
+    if(d2 < PLAYER_R*PLAYER_R){
+      const d=Math.sqrt(d2)||0.0001, nx=dx/d, ny=dy/d, push=PLAYER_R-d;
+      e.x+=nx*push; e.y+=ny*push;
+      const vn=e.vx*nx+e.vy*ny; if(vn<0){e.vx-=vn*nx; e.vy-=vn*ny;}
+    }
+  }
+}
+function move(e,inx,iny,dt,fast){
+  const mx = fast ? MAXSPEED*IT_BONUS : MAXSPEED;
+  const tvx=inx*mx, tvy=iny*mx, k=Math.min(1,RESP*dt);
+  e.vx+=(tvx-e.vx)*k; e.vy+=(tvy-e.vy)*k;
+  e.x+=e.vx*dt; e.y+=e.vy*dt;
+  resolveCollisions(e);
+}
+
+/* =========================================================================
+   NETWORK LAYER
+   ========================================================================= */
+const Net = {
+  mode:'solo', id:'', amHost:true, _cb:null, _bc:null, _peer:null, _conns:[], _hostConn:null,
+  onMessage(cb){ this._cb=cb; },
+  isHost(){ return this.mode==='peer' ? this.amHost : null; }, // null → game computes from roster
+
+  startSolo(){ this.mode='solo'; this.amHost=true; },
+
+  startLocal(){
+    this.mode='bc'; this.amHost=null;
+    this._bc = new BroadcastChannel('orb-tag-local-v1');
+    this._bc.onmessage = e => this._cb && this._cb(e.data);
+  },
+
+  async startOnline(room){
+    this.mode='peer'; this._conns=[];
+    await loadPeerJS();
+    const hostId = 'orbtag-host-' + room.toLowerCase().replace(/[^a-z0-9]/g,'');
+    return new Promise(resolve=>{
+      const host = new Peer(hostId);
+      let settled=false;
+      host.on('open', ()=>{
+        this.amHost=true; this._peer=host;
+        host.on('connection', conn=>{
+          conn.on('open', ()=> this._conns.push(conn));
+          conn.on('data', d=>{ this._cb && this._cb(d); this._relayExcept(conn,d); });
+          conn.on('close', ()=> this._conns = this._conns.filter(c=>c!==conn));
+        });
+        if(!settled){settled=true; resolve();}
+      });
+      host.on('error', err=>{
+        if(err.type==='unavailable-id'){           // someone already hosts → become a client
+          const cl = new Peer();
+          this._peer = cl; this.amHost=false;
+          cl.on('open', ()=>{
+            const conn = cl.connect(hostId,{reliable:true});
+            this._hostConn = conn;
+            conn.on('data', d=> this._cb && this._cb(d));
+            if(!settled){settled=true; resolve();}
+          });
+          cl.on('error', e=> console.warn('peer client error',e));
+        } else { console.warn('peer error',err); if(!settled){settled=true; resolve();} }
+      });
+    });
+  },
+
+  _relayExcept(except,msg){ for(const c of this._conns) if(c!==except && c.open) c.send(msg); },
+
+  send(msg){
+    if(this.mode==='bc') this._bc.postMessage(msg);
+    else if(this.mode==='peer'){
+      if(this.amHost){ for(const c of this._conns) if(c.open) c.send(msg); }
+      else if(this._hostConn && this._hostConn.open) this._hostConn.send(msg);
+    }
+  }
+};
+function loadPeerJS(){
+  return new Promise((res,rej)=>{
+    if(window.Peer) return res();
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+    s.onload=()=>res(); s.onerror=()=>rej(new Error('Could not load networking library (need internet for Online mode).'));
+    document.head.appendChild(s);
+  });
+}
+
+/* =========================================================================
+   GAME STATE
+   ========================================================================= */
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const mini = document.getElementById('mini'), mctx = mini.getContext('2d');
+
+let myId='';
+let me=null;                       // local player orb
+const remotes = new Map();         // id -> remote orb (humans, and bots on non-host clients)
+let bots = [];                     // host-owned bot orbs
+let itId='';                       // who is IT
+let botsEnabled=true;              // host fills the arena with AI bots
+let gameMode='classic';           // classic | timer | race | onetagger
+let tagSeq=0;                      // monotonic-ish sequence for IT changes
+// round state (host-driven, mirrored to clients)
+let itTimerAcc=0;                  // timer mode: seconds since last IT rotation
+let winName='', winUntil=0, winPending=false, cfgAcc=0;
+const ROT_SEC=20;                  // timer mode: rotate IT every N seconds
+const RACE_TARGET=10;              // race mode: tags needed to win
+let wasHost=false;
+const floaters=[];                 // floating +100 texts
+const particles=[];                // tag burst particles
+const cam={x:0,y:0};
+let lastT=performance.now(), sendAcc=0, running=false;
+
+function makeOrb(id,name,color,emoji,isBot){
+  const s=randomSpawn();
+  return {id,name,color,emoji:emoji||pick(EMOJIS),isBot:!!isBot,x:s.x,y:s.y,vx:0,vy:0,score:0,
+          netx:s.x,nety:s.y,immuneUntil:0,lastSeen:performance.now(),spawnT:performance.now(),
+          wanderX:rand(0,WORLD.w),wanderY:rand(0,WORLD.h),wanderT:0};
+}
+// move an orb to a fresh random spot (used when it gets tagged)
+function respawn(o){
+  const s=randomSpawn();
+  o.x=s.x; o.y=s.y; o.vx=0; o.vy=0; o.netx=s.x; o.nety=s.y; o.spawnT=performance.now();
+}
+// does THIS client own (control) the orb's position? owners respawn it.
+function ownsOrb(id){ return id===myId || (amHostNow() && bots.some(b=>b.id===id)); }
+function nextSeq(){ tagSeq++; return tagSeq; }
+function entityById(id){
+  if(id===myId) return me;
+  if(remotes.has(id)) return remotes.get(id);
+  for(const b of bots) if(b.id===id) return b;
+  return null;
+}
+// every visible orb this frame
+function getOrbs(){
+  const out=[me], now=performance.now(), seen=new Set([me.id]), host=amHostNow();
+  // de-dup by id; when we're host our own bots[] are authoritative, so ignore any
+  // bot orbs arriving from remotes (prevents doubling if a second host briefly exists)
+  remotes.forEach(r=>{ if(now-r.lastSeen<STALE_MS && !seen.has(r.id) && !(host && r.isBot)){ out.push(r); seen.add(r.id); } });
+  if(host) for(const b of bots) if(!seen.has(b.id)){ out.push(b); seen.add(b.id); }
+  return out;
+}
+function amHostNow(){
+  const h=Net.isHost();
+  if(h!==null) return h;                 // peer/solo: explicit
+  // bc mode: lowest human id alive is host
+  const ids=[myId]; const now=performance.now();
+  remotes.forEach((r,id)=>{ if(!r.isBot && now-r.lastSeen<STALE_MS) ids.push(id); });
+  ids.sort();
+  return ids[0]===myId;
+}
+
+/* ---------- IT / tagging ---------- */
+function applyItChange(id,seq){
+  if(seq<=tagSeq) return false;
+  tagSeq=seq; itId=id;
+  const e=entityById(id); if(e) e.immuneUntil=performance.now()+IMMUNE_MS;
+  logEvent(orbLabel(e)+' <span class="it">is now IT</span>');
+  return true;
+}
+function doTag(by, target){
+  // classic & race: the tagged orb becomes IT. timer & onetagger: tagger stays IT.
+  const becomesIt = (gameMode==='classic' || gameMode==='race');
+  const newIt = becomesIt ? target : by;
+  const seq=nextSeq(); itId=newIt;
+  const byE=entityById(by), tgE=entityById(target);
+  if(byE){ byE.score+=TAG_POINTS; floaters.push({x:byE.x,y:byE.y-26,txt:'+'+TAG_POINTS,life:1,color:byE.color}); }
+  if(tgE){ tgE.immuneUntil=performance.now()+IMMUNE_MS; burst(tgE.x,tgE.y,tgE.color); if(ownsOrb(target)) respawn(tgE); }
+  logEvent(orbLabel(byE)+' tagged '+orbLabel(tgE));
+  Net.send({type:'tag',by,target,newIt,seq,scoreBy:byE?byE.score:0});
+}
+function applyTag(msg){
+  if(msg.seq<=tagSeq) return;
+  tagSeq=msg.seq; itId=(msg.newIt!=null?msg.newIt:msg.target);
+  const tgE=entityById(msg.target);
+  if(tgE){ tgE.immuneUntil=performance.now()+IMMUNE_MS; burst(tgE.x,tgE.y,tgE.color); if(ownsOrb(msg.target)) respawn(tgE); }
+  const byE=entityById(msg.by); if(byE && msg.scoreBy!=null) byE.score=msg.scoreBy;
+  logEvent(orbLabel(byE)+' tagged '+orbLabel(tgE));
+}
+
+function burst(x,y,color){
+  for(let i=0;i<18;i++){ const a=Math.random()*Math.PI*2, s=rand(60,260);
+    particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:1,color}); }
+}
+// race mode: zero everyone's score for a fresh round (each client owns its own + host owns bots)
+function applyReset(){ me.score=0; for(const b of bots) b.score=0; winName=''; winUntil=0; winPending=false; }
+// host picks a fresh IT and announces it
+function hostAssignIt(){
+  const orbs=getOrbs(); if(!orbs.length) return;
+  const t=orbs[(Math.random()*orbs.length)|0].id, seq=nextSeq();
+  itId=t; const e=entityById(t); if(e) e.immuneUntil=performance.now()+IMMUNE_MS;
+  logEvent(orbLabel(e)+' <span class="it">is now IT</span>');
+  Net.send({type:'it',id:t,seq});
+}
+
+/* ---------- incoming messages ---------- */
+Net.onMessage(msg=>{
+  const now=performance.now();
+  switch(msg.type){
+    case 'state':{
+      if(msg.id===myId) return;
+      let r=remotes.get(msg.id);
+      const isNew=!r;
+      if(!r){ r={id:msg.id,isBot:false,x:msg.x,y:msg.y}; remotes.set(msg.id,r); }
+      r.name=msg.name; r.color=msg.color; r.emoji=msg.emoji; r.score=msg.score;
+      r.netx=msg.x; r.nety=msg.y; r.lastSeen=now; r.isBot=false;
+      if(isNew) logEvent(orbLabel(r)+' joined');
+      break; }
+    case 'bots':{
+      for(const b of msg.list){
+        let r=remotes.get(b.id);
+        if(!r){ r={id:b.id,isBot:true,x:b.x,y:b.y}; remotes.set(b.id,r); }
+        r.name=b.name; r.color=b.color; r.emoji=b.emoji; r.score=b.score;
+        r.netx=b.x; r.nety=b.y; r.lastSeen=now; r.isBot=true;
+      }
+      break; }
+    case 'tag': applyTag(msg); break;
+    case 'it':  applyItChange(msg.id,msg.seq); break;
+    case 'botcfg': botsEnabled=!!msg.enabled; break;
+    case 'gamecfg': gameMode=msg.mode||gameMode; break;
+    case 'win': winName=msg.name; winUntil=performance.now()+5000;
+      logEvent('<b>'+escapeHtml(msg.name)+'</b> <span class="it">wins the round</span>'); break;
+    case 'reset': applyReset(); break;
+    case 'bye': { const r=remotes.get(msg.id); if(r&&!r.isBot) logEvent(orbLabel(r)+' left'); remotes.delete(msg.id); break; }
+  }
+});
+
+/* =========================================================================
+   INPUT
+   ========================================================================= */
+const keys={};
+addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase(); keys[k]=true;
+  if(k==='b' && !e.repeat && running && Net.mode!=='solo'){
+    botsEnabled=!botsEnabled;
+    Net.send({type:'botcfg',enabled:botsEnabled});
+    toast('Bots '+(botsEnabled?'ON':'OFF'));
+  }
+  if(k==='e' && !e.repeat && running){ emojiPalette.classList.toggle('show'); }
+});
+addEventListener('keyup',  e=>{ keys[e.key.toLowerCase()]=false; });
+
+const toastEl=document.getElementById('toast'); let toastTimer=null;
+function toast(msg){ toastEl.textContent=msg; toastEl.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>toastEl.classList.remove('show'),1400); }
+
+// in-game emoji picker — change your orb live (button or 'E')
+const emojiBtn=document.getElementById('emojiBtn');
+const emojiPalette=document.getElementById('emojiPalette');
+EMOJIS.forEach(e=>{ const b=document.createElement('button'); b.type='button'; b.textContent=e;
+  b.onclick=()=>{ if(me){ me.emoji=e; emojiBtn.textContent=e; } emojiPalette.classList.remove('show'); };
+  emojiPalette.appendChild(b); });
+emojiBtn.onclick=()=> emojiPalette.classList.toggle('show');
+
+const touch={active:false,sx:0,sy:0,x:0,y:0,id:null};
+function onTouchStart(e){ const t=e.changedTouches[0]; touch.active=true; touch.id=t.identifier;
+  touch.sx=t.clientX; touch.sy=t.clientY; touch.x=t.clientX; touch.y=t.clientY; }
+function onTouchMove(e){ for(const t of e.changedTouches) if(t.identifier===touch.id){ touch.x=t.clientX; touch.y=t.clientY; } e.preventDefault(); }
+function onTouchEnd(e){ for(const t of e.changedTouches) if(t.identifier===touch.id){ touch.active=false; touch.id=null; } }
+cv.addEventListener('touchstart',onTouchStart,{passive:false});
+cv.addEventListener('touchmove',onTouchMove,{passive:false});
+cv.addEventListener('touchend',onTouchEnd);
+cv.addEventListener('touchcancel',onTouchEnd);
+
+function inputVector(){
+  if(touch.active){
+    let dx=touch.x-touch.sx, dy=touch.y-touch.sy;
+    const len=Math.hypot(dx,dy), max=70;
+    if(len>4){ const m=Math.min(len,max)/max; const a=Math.atan2(dy,dx); return {x:Math.cos(a)*m,y:Math.sin(a)*m}; }
+    return {x:0,y:0};
+  }
+  let x=(keys['d']||keys['arrowright']?1:0)-(keys['a']||keys['arrowleft']?1:0);
+  let y=(keys['s']||keys['arrowdown']?1:0)-(keys['w']||keys['arrowup']?1:0);
+  const l=Math.hypot(x,y); if(l>1){x/=l;y/=l;}
+  return {x,y};
+}
+
+/* =========================================================================
+   BOTS (host only)
+   ========================================================================= */
+function initBots(){ bots=[]; for(let i=0;i<BOT_COUNT;i++) bots.push(makeOrb('bot_'+i+'_'+(Math.random()*1e6|0),pick(NAMES),pick(COLORS),pick(EMOJIS),true)); }
+function updateBots(dt){
+  const orbs=getOrbs(), now=performance.now();
+  const itOrb=orbs.find(o=>o.id===itId);
+  for(const b of bots){
+    let ix=0, iy=0;
+    if(itId===b.id){                                  // chase nearest non-immune
+      let best=null,bd=1e18;
+      for(const o of orbs){ if(o.id===b.id||now<o.immuneUntil) continue;
+        const d=dist2(b.x,b.y,o.x,o.y); if(d<bd){bd=d;best=o;} }
+      if(best){ const a=Math.atan2(best.y-b.y,best.x-b.x); ix=Math.cos(a); iy=Math.sin(a); }
+    } else if(itOrb && dist2(b.x,b.y,itOrb.x,itOrb.y) < 320*320){   // flee the IT orb
+      const a=Math.atan2(b.y-itOrb.y,b.x-itOrb.x); ix=Math.cos(a); iy=Math.sin(a);
+    } else {                                           // wander
+      b.wanderT-=dt;
+      if(b.wanderT<=0 || dist2(b.x,b.y,b.wanderX,b.wanderY)<60*60){
+        const s=randomSpawn(); b.wanderX=s.x; b.wanderY=s.y; b.wanderT=rand(2,5);
+      }
+      const a=Math.atan2(b.wanderY-b.y,b.wanderX-b.x); ix=Math.cos(a); iy=Math.sin(a);
+    }
+    move(b,ix,iy,dt,itId===b.id);
+    // bot does the tagging when it's IT
+    if(itId===b.id && now>b.immuneUntil){
+      for(const o of orbs){ if(o.id===b.id||now<o.immuneUntil) continue;
+        if(dist2(b.x,b.y,o.x,o.y) < (PLAYER_R*2)*(PLAYER_R*2)){ doTag(b.id,o.id); break; } }
+    }
+  }
+}
+
+/* =========================================================================
+   MAIN LOOP
+   ========================================================================= */
+function tick(){
+  if(!running) return;
+  const t=performance.now(); let dt=(t-lastT)/1000; lastT=t; if(dt>0.05)dt=0.05;
+  const now=t;
+
+  // local movement
+  const inp=inputVector();
+  move(me, inp.x, inp.y, dt, itId===myId);
+
+  // local tagging
+  if(itId===myId && now>me.immuneUntil){
+    for(const o of getOrbs()){ if(o.id===myId||now<o.immuneUntil) continue;
+      if(dist2(me.x,me.y,o.x,o.y) < (PLAYER_R*2)*(PLAYER_R*2)){ doTag(myId,o.id); break; } }
+  }
+
+  // smooth remotes toward their network positions; snap on big jumps (respawns/teleports)
+  remotes.forEach(r=>{ const dx=r.netx-r.x, dy=r.nety-r.y;
+    if(dx*dx+dy*dy>200*200){ r.x=r.netx; r.y=r.nety; r.spawnT=performance.now(); }
+    else { const k=Math.min(1,12*dt); r.x+=dx*k; r.y+=dy*k; } });
+
+  // prune stale remotes
+  remotes.forEach((r,id)=>{ if(now-r.lastSeen>STALE_MS) remotes.delete(id); });
+
+  // host duties: bots + assign IT
+  const host=amHostNow();
+  if(host && !wasHost) remotes.forEach((r,id)=>{ if(r.isBot) remotes.delete(id); }); // shed leftover bot views
+  if(!host && wasHost) bots=[];
+  wasHost=host;
+
+  if(host){
+    if(botsEnabled && bots.length===0) initBots();
+    if(!botsEnabled && bots.length>0) bots=[];   // remove our bots; clients drop them on staleness
+    updateBots(dt);
+
+    // (re)assign IT if nobody holds it (round start, or the IT disconnected)
+    if(!getOrbs().map(o=>o.id).includes(itId)) hostAssignIt();
+
+    // timer mode: rotate IT to a random orb on an interval
+    if(gameMode==='timer'){ itTimerAcc+=dt; if(itTimerAcc>=ROT_SEC){ itTimerAcc=0; hostAssignIt(); } }
+
+    // race mode: first to RACE_TARGET tags wins, then scores reset + fresh IT
+    if(gameMode==='race'){
+      if(!winPending){
+        const w=getOrbs().find(o=>o.score>=RACE_TARGET*TAG_POINTS);
+        if(w){ winPending=true; winName=w.name; winUntil=now+5000;
+          logEvent('<b>'+escapeHtml(w.name)+'</b> <span class="it">wins the round</span>');
+          Net.send({type:'win',name:w.name}); }
+      } else if(now>winUntil){
+        winPending=false; applyReset(); Net.send({type:'reset'}); hostAssignIt();
+      }
+    }
+
+    // keep clients in sync on the chosen rules (cheap, ~1 Hz)
+    cfgAcc+=dt*1000; if(cfgAcc>=1000){ cfgAcc=0; Net.send({type:'gamecfg',mode:gameMode}); }
+  }
+
+  // broadcast my state + bots
+  sendAcc+=dt*1000;
+  if(sendAcc>=SEND_MS){
+    sendAcc=0;
+    Net.send({type:'state',id:myId,name:me.name,color:me.color,emoji:me.emoji,score:me.score,
+              x:Math.round(me.x),y:Math.round(me.y),vx:me.vx,vy:me.vy});
+    if(host && bots.length)
+      Net.send({type:'bots',list:bots.map(b=>({id:b.id,name:b.name,color:b.color,emoji:b.emoji,score:Math.round(b.score),x:Math.round(b.x),y:Math.round(b.y)}))});
+  }
+
+  // effects
+  for(let i=floaters.length-1;i>=0;i--){ const f=floaters[i]; f.y-=40*dt; f.life-=dt*0.9; if(f.life<=0) floaters.splice(i,1); }
+  for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.92; p.vy*=0.92; p.life-=dt*1.6; if(p.life<=0) particles.splice(i,1); }
+
+  render(now);
+  requestAnimationFrame(tick);
+}
+
+/* =========================================================================
+   RENDER
+   ========================================================================= */
+function resize(){ cv.width=innerWidth; cv.height=innerHeight; }
+addEventListener('resize',resize); resize();
+
+function render(now){
+  const W=cv.width,H=cv.height;
+  // camera follows local player, clamped to world
+  cam.x=clamp(me.x-W/2,0,Math.max(0,WORLD.w-W));
+  cam.y=clamp(me.y-H/2,0,Math.max(0,WORLD.h-H));
+
+  ctx.fillStyle='#0a0a0a'; ctx.fillRect(0,0,W,H);
+  ctx.save(); ctx.translate(-cam.x,-cam.y);
+
+  // grid
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(250,250,250,.05)';
+  const g=80, x0=Math.floor(cam.x/g)*g, y0=Math.floor(cam.y/g)*g;
+  ctx.beginPath();
+  for(let x=x0;x<cam.x+W+g;x+=g){ ctx.moveTo(x,cam.y); ctx.lineTo(x,cam.y+H); }
+  for(let y=y0;y<cam.y+H+g;y+=g){ ctx.moveTo(cam.x,y); ctx.lineTo(cam.x+W,y); }
+  ctx.stroke();
+
+  // world border
+  ctx.lineWidth=6; ctx.strokeStyle='rgba(250,250,250,.22)';
+  ctx.strokeRect(0,0,WORLD.w,WORLD.h);
+
+  // obstacles
+  for(const o of obstacles){
+    ctx.fillStyle='rgba(38,38,38,.95)';            // #262626 surface
+    roundRect(o.x,o.y,o.w,o.h,8); ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle='rgba(250,250,250,.13)';
+    roundRect(o.x,o.y,o.w,o.h,8); ctx.stroke();
+    ctx.fillStyle='rgba(250,250,250,.05)';
+    ctx.fillRect(o.x,o.y,o.w,4);
+  }
+
+  // particles
+  for(const p of particles){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,3*p.life+1,0,7); ctx.fill(); }
+  ctx.globalAlpha=1;
+
+  // orbs
+  for(const o of getOrbs()) drawOrb(o,now);
+
+  // floating texts
+  ctx.textAlign='center'; ctx.font='700 16px Roboto,ui-sans-serif,system-ui';
+  for(const f of floaters){ ctx.globalAlpha=Math.max(0,f.life); ctx.fillStyle=f.color;
+    ctx.fillText(f.txt,f.x,f.y); } ctx.globalAlpha=1;
+
+  ctx.restore();
+  if(touch.active) drawJoystick();
+  drawHUD(now);
+  drawMini();
+}
+function drawJoystick(){
+  const bx=touch.sx, by=touch.sy, max=70;
+  let dx=touch.x-bx, dy=touch.y-by; const len=Math.hypot(dx,dy);
+  if(len>max){ dx=dx/len*max; dy=dy/len*max; }
+  ctx.save();
+  ctx.lineWidth=3; ctx.strokeStyle='rgba(250,250,250,.45)';
+  ctx.beginPath(); ctx.arc(bx,by,max,0,7); ctx.stroke();
+  ctx.fillStyle='rgba(250,250,250,.85)';
+  ctx.beginPath(); ctx.arc(bx+dx,by+dy,24,0,7); ctx.fill();
+  ctx.restore();
+}
+
+function drawOrb(o,now){
+  const isIt=o.id===itId, immune=now<o.immuneUntil;
+  // spawn-in pop: scale up + fade in for ~380ms after a (re)spawn
+  const age=now-(o.spawnT||0), inT=age<380?age/380:1;
+  const inScale=0.25+0.75*inT, inAlpha=Math.min(1,inT*1.3), R=PLAYER_R*inScale;
+  // emoji avatar — subtle neutral halo so dark emojis stay legible on the dark arena (not a color haze)
+  const flash = immune && (((now/120)|0)%2===0);
+  ctx.globalAlpha=(flash?0.4:1)*inAlpha;
+  ctx.font=((R*2.1)|0)+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowColor='rgba(255,255,255,0.7)'; ctx.shadowBlur=R*1.2; ctx.shadowOffsetX=0; ctx.shadowOffsetY=0;
+  ctx.fillText(o.emoji||'🙂', o.x, o.y+1);
+  ctx.fillText(o.emoji||'🙂', o.x, o.y+1);
+  ctx.fillText(o.emoji||'🙂', o.x, o.y+1); // extra passes deepen the halo so dark emojis read on black
+  ctx.shadowBlur=0; ctx.shadowColor='transparent';
+  ctx.textBaseline='alphabetic';
+  // IT ring (gameplay indicator, not a color haze)
+  ctx.globalAlpha=inAlpha;
+  if(isIt){ const pr=R+9+Math.sin(now/120)*2.5;
+    ctx.lineWidth=3; ctx.strokeStyle='#ef4444';
+    ctx.beginPath(); ctx.arc(o.x,o.y,pr,0,7); ctx.stroke();
+    // caret marker pointing down at the IT orb (drawn, not an emoji)
+    const my=o.y-PLAYER_R-9;
+    ctx.fillStyle='#ef4444'; ctx.beginPath();
+    ctx.moveTo(o.x-5,my-5); ctx.lineTo(o.x+5,my-5); ctx.lineTo(o.x,my+2); ctx.closePath(); ctx.fill(); }
+  // name + score
+  ctx.font='500 12px Roboto,ui-sans-serif,system-ui'; ctx.textAlign='center';
+  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(o.name,o.x+1,o.y+PLAYER_R+15+1);
+  ctx.fillStyle=o.id===myId?'#fafafa':'#d4d4d4'; ctx.fillText(o.name,o.x,o.y+PLAYER_R+15);
+  ctx.globalAlpha=1;
+}
+
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+/* ---------- HUD ---------- */
+const boardRows=document.getElementById('boardRows');
+const bannerBig=document.getElementById('bannerBig'), bannerSub=document.getElementById('bannerSub');
+// inline SVG icons (replace emojis — matches the minimalist mncoleman brand)
+const ICON_IT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="7.5"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>';
+const ICON_WIN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4.5a4 4 0 0 1-8 0z"/><path d="M8 5.5H5.5a2.5 2.5 0 0 0 2.8 3.4M16 5.5h2.5a2.5 2.5 0 0 1-2.8 3.4"/><path d="M12 12.5v3M9 19h6M9.5 19l.6-3.5M14.5 19l-.6-3.5"/></svg>';
+// activity feed
+const feedEl=document.getElementById('feed');
+function orbLabel(o){ return o ? '<span class="ev-e">'+(o.emoji||'•')+'</span> <b>'+escapeHtml(o.name)+'</b>' : '<b>someone</b>'; }
+function logEvent(html){
+  const d=document.createElement('div'); d.className='ev'; d.innerHTML=html;
+  d.addEventListener('animationend',()=>d.remove());
+  feedEl.insertBefore(d, feedEl.firstChild);
+  while(feedEl.children.length>10) feedEl.lastChild.remove();
+}
+let _boardKey='', _bBig='', _bSub='', _bCol='';
+function setBanner(big,sub,col){
+  if(big!==_bBig){ bannerBig.innerHTML=big; _bBig=big; }
+  if(col!==_bCol){ bannerBig.style.color=col; _bCol=col; }
+  if(sub!==_bSub){ bannerSub.textContent=sub; _bSub=sub; }
+}
+function drawHUD(now){
+  // scoreboard (rebuild DOM only when something changed)
+  const orbs=getOrbs().slice().sort((a,b)=>b.score-a.score).slice(0,6);
+  const key=orbs.map(o=>o.id+':'+o.score+':'+(o.id===itId?1:0)+':'+o.name+':'+o.emoji).join('|');
+  if(key!==_boardKey){ _boardKey=key;
+    let html='';
+    for(const o of orbs){
+      const itMark=o.id===itId?'<span class="fire">'+ICON_IT+'</span>':'';
+      html+=`<div class="row ${o.id===myId?'me':''}"><span class="oe">${o.emoji||''}</span>`+
+            `<span class="nm">${escapeHtml(o.name)} ${itMark}</span><span class="sc">${o.score}</span></div>`;
+    }
+    boardRows.innerHTML=html;
+  }
+
+  // banner
+  if(now<winUntil && winName){
+    setBanner(ICON_WIN+'<span>'+escapeHtml(winName)+' wins the round!</span>','resetting scores…','#fafafa');
+  } else if(itId===myId){
+    const sub = now<me.immuneUntil ? 'get ready…'
+      : (gameMode==='onetagger'||gameMode==='timer') ? 'hunt everyone — +'+TAG_POINTS+' per tag'
+      : 'catch someone to score +'+TAG_POINTS;
+    setBanner(ICON_IT+'<span>YOU\'RE IT</span>', sub, '#ef4444');
+  } else { const it=entityById(itId);
+    const big = it ? '<span>Run! '+escapeHtml(it.name)+' is IT</span>' : '';
+    const sub = it ? (gameMode==='onetagger'?'stay away from the tagger'
+      :gameMode==='timer'?'IT rotates on a timer':'tag others when it\'s your turn') : '';
+    setBanner(big, sub, '#fafafa'); }
+}
+function drawMini(){
+  const W=mini.width,H=mini.height, sx=W/WORLD.w, sy=H/WORLD.h;
+  mctx.clearRect(0,0,W,H);
+  mctx.fillStyle='rgba(10,10,10,.8)'; mctx.fillRect(0,0,W,H);
+  mctx.fillStyle='rgba(250,250,250,.16)';
+  for(const o of obstacles) mctx.fillRect(o.x*sx,o.y*sy,Math.max(1,o.w*sx),Math.max(1,o.h*sy));
+  for(const o of getOrbs()){
+    mctx.fillStyle=o.id===itId?'#ef4444':o.color;
+    mctx.beginPath(); mctx.arc(o.x*sx,o.y*sy,o.id===myId?3:2.2,0,7); mctx.fill();
+  }
+  // viewport rect
+  mctx.strokeStyle='rgba(255,255,255,.25)'; mctx.lineWidth=1;
+  mctx.strokeRect(cam.x*sx,cam.y*sy,cv.width*sx,cv.height*sy);
+}
+function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* =========================================================================
+   LOBBY  →  START
+   ========================================================================= */
+const lobby=document.getElementById('lobby');
+const nameIn=document.getElementById('nameIn');
+const egEl=document.getElementById('emojiGrid');
+const modesEl=document.getElementById('modes');
+const roomWrap=document.getElementById('roomWrap');
+const botsWrap=document.getElementById('botsWrap');
+const botsSwitch=document.getElementById('botsSwitch');
+const ruleIn=document.getElementById('ruleIn');
+const ruleHint=document.getElementById('ruleHint');
+const roomIn=document.getElementById('roomIn');
+const RULE_HINTS={
+  classic:'Catch any orb and they become the new IT. Tagged orbs respawn elsewhere.',
+  timer:'IT rotates to a random player every 20s. Rack up tags while you hold it.',
+  race:'Tagged-becomes-IT, but first orb to 10 tags wins — then scores reset.',
+  onetagger:'One permanent IT hunts everyone. Each tag scores; victims respawn.'
+};
+ruleIn.onchange=()=>{ ruleHint.textContent=RULE_HINTS[ruleIn.value]||''; };
+ruleHint.textContent=RULE_HINTS.classic;
+const playBtn=document.getElementById('playBtn');
+const PLAY_HTML=playBtn.innerHTML;
+const lobbyErr=document.getElementById('lobbyErr');
+const statText=document.getElementById('statText');
+const statCode=document.getElementById('statCode');
+
+let chosenColor=pick(COLORS), chosenEmoji=pick(EMOJIS), chosenMode='local';
+nameIn.value='mncoleman';
+EMOJIS.forEach(e=>{ const b=document.createElement('button'); b.type='button';
+  b.className='eopt'+(e===chosenEmoji?' on':''); b.textContent=e;
+  b.onclick=()=>{ chosenEmoji=e; [...egEl.children].forEach(x=>x.classList.remove('on')); b.classList.add('on'); };
+  egEl.appendChild(b); });
+modesEl.querySelectorAll('.mode').forEach(m=>{ m.onclick=()=>{
+  chosenMode=m.dataset.mode; modesEl.querySelectorAll('.mode').forEach(x=>x.classList.remove('on')); m.classList.add('on');
+  roomWrap.classList.toggle('show',chosenMode==='online');
+  botsWrap.classList.toggle('show',chosenMode!=='solo');
+  if(chosenMode==='online' && !roomIn.value) roomIn.value=randCode();
+};});
+botsWrap.classList.toggle('show',chosenMode!=='solo');   // initial (default mode = local)
+botsSwitch.onclick=()=>{ const on=!botsSwitch.classList.contains('on');
+  botsSwitch.classList.toggle('on',on); botsSwitch.setAttribute('aria-checked',on); };
+document.getElementById('copyBtn').onclick=async()=>{ try{ await navigator.clipboard.writeText(roomIn.value); document.getElementById('copyBtn').textContent='Copied'; setTimeout(()=>document.getElementById('copyBtn').textContent='Copy',1200);}catch(e){} };
+function randCode(){ const s='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let r=''; for(let i=0;i<6;i++) r+=s[(Math.random()*s.length)|0]; return r; }
+nameIn.addEventListener('keydown',e=>{ if(e.key==='Enter') playBtn.click(); });
+
+playBtn.onclick=async()=>{
+  lobbyErr.textContent='';
+  myId='p_'+Date.now().toString(36)+'_'+(Math.random()*1e6|0).toString(36);
+  me=makeOrb(myId,(nameIn.value.trim()||'Player').slice(0,14),chosenColor,chosenEmoji,false);
+  emojiBtn.textContent=me.emoji;
+  botsEnabled = chosenMode==='solo' ? true : botsSwitch.classList.contains('on');
+  gameMode = ruleIn.value;
+
+  try{
+    if(chosenMode==='solo'){ Net.startSolo(); statText.textContent='solo + bots'; }
+    else if(chosenMode==='local'){ Net.startLocal(); statText.textContent='local network (this device)'; }
+    else { const room=(roomIn.value.trim()||randCode()).toUpperCase(); roomIn.value=room;
+      playBtn.textContent='Connecting…'; playBtn.disabled=true;
+      await Net.startOnline(room);
+      statText.textContent='online room';
+      statCode.innerHTML='room <span class="code">'+escapeHtml(room)+'</span>'+
+        '<button id="copyRoom" class="copybtn" title="Copy room code">Copy</button>';
+      const cr=document.getElementById('copyRoom');
+      cr.onclick=async()=>{ try{ await navigator.clipboard.writeText(room); cr.textContent='Copied';
+        setTimeout(()=>cr.textContent='Copy',1200); }catch(e){ cr.textContent='—'; } };
+    }
+  }catch(err){
+    lobbyErr.textContent=err.message||'Connection failed.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; return;
+  }
+
+  lobby.style.display='none';
+  running=true; lastT=performance.now();
+  requestAnimationFrame(tick);
+};
+
+// say goodbye so others drop us promptly (only on a real unload)
+function sayBye(){ if(running) Net.send({type:'bye',id:myId}); }
+addEventListener('pagehide',sayBye);
+
+// refresh / close protection while in a match
+const leaveModal=document.getElementById('leaveModal');
+let allowUnload=false;
+function showLeave(){ if(running && !allowUnload) leaveModal.classList.add('show'); }
+document.getElementById('stayBtn').onclick=()=> leaveModal.classList.remove('show');
+document.getElementById('leaveBtn').onclick=()=>{ allowUnload=true; leaveModal.classList.remove('show'); sayBye(); location.reload(); };
+// catch keyboard refresh (F5 / Ctrl+R / Cmd+R) and show the branded modal instead
+addEventListener('keydown',e=>{
+  if(!running || allowUnload) return;
+  const k=e.key.toLowerCase();
+  if(k==='f5' || ((e.metaKey||e.ctrlKey) && k==='r')){ e.preventDefault(); e.stopPropagation(); showLeave(); }
+}, true);
+// native guard covers the reload button, tab close, and navigation (browsers don't allow a custom UI there)
+addEventListener('beforeunload',e=>{ if(running && !allowUnload){ e.preventDefault(); e.returnValue=''; } });
+</script>
+</body>
+</html>
