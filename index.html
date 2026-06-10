@@ -73,6 +73,8 @@
   #hostInfo #hostQr{display:none;width:152px;height:152px;margin:9px auto 7px;border-radius:10px;
     background:#fff;padding:8px;box-sizing:border-box;image-rendering:pixelated;}
   #hostInfo .hi-count{margin-top:5px;font-size:12px;color:var(--txt);font-weight:700;}
+  #hostInfo .hi-timer{margin-top:5px;font-size:14px;color:var(--accent);font-weight:800;letter-spacing:.02em;}
+  #hostInfo .hi-timer:empty{display:none;}
   @media (max-width:640px){ #hostInfo .hi-code{font-size:23px;} #hostInfo{padding:9px 16px;} }
   #banner .sub{font-size:12px;color:var(--dim);margin-top:2px;}
 
@@ -93,6 +95,17 @@
   #toast{top:64px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);
     border-radius:10px;padding:8px 14px;font-size:13px;font-weight:700;opacity:0;transition:opacity .2s;backdrop-filter:blur(8px);}
   #toast.show{opacity:1;}
+
+  /* in-game rules control (room creator only) */
+  #ruleCtl{display:none;bottom:54px;left:50%;transform:translateX(-50%);pointer-events:auto;
+    align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:6px 8px 6px 13px;backdrop-filter:blur(8px);}
+  #ruleCtl.show{display:flex;}
+  #ruleCtl label{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);}
+  #ruleCtl select{background:rgba(0,0,0,.3);border:1px solid var(--line);color:var(--txt);border-radius:8px;
+    padding:5px 9px;font-size:13px;font-family:inherit;outline:none;cursor:pointer;}
+  #ruleCtl select:focus{border-color:var(--accent);}
+  body.spectator #ruleCtl{bottom:auto;top:300px;left:auto;right:14px;transform:none;width:208px;justify-content:space-between;}
 
   /* in-game emoji picker */
   #emojiBtn{bottom:44px;left:14px;pointer-events:auto;cursor:pointer;width:42px;height:42px;border-radius:11px;
@@ -259,6 +272,7 @@
   <img id="hostQr" alt="Scan to join" />
   <div class="hi-sub">scan the code, or open <b>tag.mncoleman.com</b> → <b>Join a room</b> → enter the code</div>
   <div class="hi-count" id="hostCount">0 players connected</div>
+  <div class="hi-timer" id="hostTimer"></div>
 </div>
 <div id="status" class="hud">
   <div class="pill"><span class="led"></span><span id="statText" class="muted">solo</span></div>
@@ -266,6 +280,20 @@
 </div>
 <div id="hint" class="hud">Move: <b>WASD</b> / <b>Arrows</b> · tag while you're <b style="color:var(--it)">IT</b> · <b>E</b> change orb · <b>B</b> toggle bots</div>
 <div id="toast" class="hud"></div>
+<div id="ruleCtl" class="hud" title="Change the tag rules for everyone (room creator)">
+  <label>Rules</label>
+  <select id="ruleCtlSel">
+    <option value="classic">Tagged becomes IT</option>
+    <option value="timer">Timer rotation</option>
+    <option value="race">Race to 10 tags</option>
+    <option value="onetagger">One tagger</option>
+  </select>
+  <select id="rotSecSel" style="display:none" title="How often IT switches">
+    <option value="10">every 10s</option><option value="15">every 15s</option>
+    <option value="20" selected>every 20s</option><option value="30">every 30s</option>
+    <option value="45">every 45s</option><option value="60">every 60s</option>
+  </select>
+</div>
 <button id="emojiBtn" class="hud" title="Change your orb (E)"></button>
 <div id="emojiPalette" class="hud"></div>
 <div id="credit" class="hud"><span class="logo">m</span><span><b>mn</b>coleman</span></div>
@@ -391,6 +419,7 @@ const NAMES  = ['Zap','Nova','Bolt','Echo','Pixel','Vex','Juno','Kilo','Riff','O
 const EMOJIS = ['😀','😎','🤖','👾','😺','🐶','🦊','🐸','🐵','🦄','🐙','🐢','🦖','🐝','🦋','⭐',
                 '🔥','💧','🍕','🎮','👻','💀','🤡','🎃','🌮','🐧','🐼','🦔','🦦','🦀','🐳','🚀'];
 const EMOJI_FONT='28px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+const RULE_NAME={classic:'Tagged becomes IT',timer:'Timer rotation',race:'Race to 10 tags',onetagger:'One tagger'};
 
 // Hand-built obstacle course (walls are the world bounds; these are interior).
 const obstacles = [
@@ -458,7 +487,8 @@ function move(e,inx,iny,dt,fast){
    NETWORK LAYER
    ========================================================================= */
 const Net = {
-  mode:'solo', id:'', amHost:true, _cb:null, _bc:null, _peer:null, _conns:[], _hostConn:null,
+  mode:'solo', amHost:true, room:'', hostId:'', onHostLost:null,
+  _cb:null, _bc:null, _peer:null, _conns:[], _hostConn:null, _migrating:false,
   onMessage(cb){ this._cb=cb; },
   isHost(){ return this.mode==='peer' ? this.amHost : null; }, // null → game computes from roster
 
@@ -471,34 +501,73 @@ const Net = {
   },
 
   async startOnline(room){
-    this.mode='peer'; this._conns=[];
+    this.mode='peer'; this._conns=[]; this.room=room;
+    this.hostId = 'orbtag-host-' + room.toLowerCase().replace(/[^a-z0-9]/g,'');
     await loadPeerJS();
-    const hostId = 'orbtag-host-' + room.toLowerCase().replace(/[^a-z0-9]/g,'');
     return new Promise(resolve=>{
-      const host = new Peer(hostId);
-      let settled=false;
-      host.on('open', ()=>{
-        this.amHost=true; this._peer=host;
-        host.on('connection', conn=>{
-          conn.on('open', ()=> this._conns.push(conn));
-          conn.on('data', d=>{ this._cb && this._cb(d); this._relayExcept(conn,d); });
-          conn.on('close', ()=> this._conns = this._conns.filter(c=>c!==conn));
-        });
-        if(!settled){settled=true; resolve();}
-      });
+      const host = new Peer(this.hostId);
+      let settled=false; const done=()=>{ if(!settled){settled=true; resolve();} };
+      host.on('open', ()=>{ this.amHost=true; this._peer=host; this._attachHostPeer(host); done(); });
       host.on('error', err=>{
-        if(err.type==='unavailable-id'){           // someone already hosts → become a client
-          const cl = new Peer();
-          this._peer = cl; this.amHost=false;
-          cl.on('open', ()=>{
-            const conn = cl.connect(hostId,{reliable:true});
-            this._hostConn = conn;
-            conn.on('data', d=> this._cb && this._cb(d));
-            if(!settled){settled=true; resolve();}
-          });
-          cl.on('error', e=> console.warn('peer client error',e));
-        } else { console.warn('peer error',err); if(!settled){settled=true; resolve();} }
+        if(err.type==='unavailable-id'){ this.amHost=false; this._connectClient(done); }  // already hosted → join as client
+        else { console.warn('peer error',err); done(); }
       });
+    });
+  },
+
+  _attachHostPeer(peer){
+    peer.on('connection', conn=>{
+      conn.on('open', ()=> this._conns.push(conn));
+      conn.on('data', d=>{ this._cb && this._cb(d); this._relayExcept(conn,d); });
+      conn.on('close', ()=> this._conns = this._conns.filter(c=>c!==conn));
+    });
+  },
+  _connectClient(done){
+    const cl = new Peer(); this._peer = cl;
+    cl.on('open', ()=>{
+      const conn = cl.connect(this.hostId,{reliable:true});
+      this._hostConn = conn;
+      conn.on('data', d=> this._cb && this._cb(d));
+      conn.on('open', ()=> done && done());
+      conn.on('close', ()=>{ if(!this._migrating && this.mode==='peer' && !this.amHost) this.onHostLost && this.onHostLost(); });
+      setTimeout(()=> done && done(), 1600);   // proceed even if the open event is slow
+    });
+    cl.on('error', e=>{ console.warn('client peer error',e); done && done(); });
+  },
+
+  // migration: re-claim the room's host id and become the relay host
+  becomeHost(){
+    this._migrating=true;
+    return new Promise(resolve=>{
+      let tries=0;
+      const attempt=()=>{
+        try{ this._peer && this._peer.destroy(); }catch(e){}
+        const host=new Peer(this.hostId);
+        host.on('open', ()=>{ this.amHost=true; this._peer=host; this._conns=[]; this._hostConn=null; this._attachHostPeer(host); this._migrating=false; resolve(true); });
+        host.on('error', err=>{
+          if(err.type==='unavailable-id' && tries++<12) setTimeout(attempt,1200);  // old id not freed yet
+          else { console.warn('becomeHost failed',err); this._migrating=false; resolve(false); }
+        });
+      };
+      attempt();
+    });
+  },
+  // migration: reconnect to whoever is now hosting the room
+  rejoin(){
+    this._migrating=true;
+    return new Promise(resolve=>{
+      let tries=0, ok=false;
+      try{ this._peer && this._peer.destroy(); }catch(e){}
+      const cl=new Peer(); this._peer=cl;
+      const tryConnect=()=>{
+        const conn=cl.connect(this.hostId,{reliable:true}); this._hostConn=conn;
+        conn.on('open', ()=>{ ok=true; this._migrating=false; resolve(true); });
+        conn.on('data', d=> this._cb && this._cb(d));
+        conn.on('close', ()=>{ if(!this._migrating && !this.amHost) this.onHostLost && this.onHostLost(); });
+        setTimeout(()=>{ if(!ok && tries++<15){ try{conn.close();}catch(e){} tryConnect(); } }, 1400);
+      };
+      cl.on('open', tryConnect);
+      cl.on('error', e=>{});
     });
   },
 
@@ -537,11 +606,13 @@ let botsEnabled=true;              // host fills the arena with AI bots
 let gameMode='classic';           // classic | timer | race | onetagger
 let spectator=false;              // single-screen host: shows whole arena, has no orb of its own
 let roomCode='';                  // current online/single-screen room code
+let roomOrder=[];                 // peer rooms: player ids in join order (host-maintained) for host migration
 let tagSeq=0;                      // monotonic-ish sequence for IT changes
 // round state (host-driven, mirrored to clients)
 let itTimerAcc=0;                  // timer mode: seconds since last IT rotation
 let winName='', winUntil=0, winPending=false, cfgAcc=0;
-const ROT_SEC=20;                  // timer mode: rotate IT every N seconds
+let rotSec=20;                     // timer mode: rotate IT every N seconds (host-adjustable)
+let timerLeft=20;                  // seconds until the next rotation (for the countdown display)
 const RACE_TARGET=10;              // race mode: tags needed to win
 let wasHost=false;
 const floaters=[];                 // floating +100 texts
@@ -643,7 +714,8 @@ Net.onMessage(msg=>{
       if(!r){ r={id:msg.id,isBot:false,x:msg.x,y:msg.y}; remotes.set(msg.id,r); }
       r.name=msg.name; r.color=msg.color; r.emoji=msg.emoji; r.score=msg.score;
       r.netx=msg.x; r.nety=msg.y; r.lastSeen=now; r.isBot=false;
-      if(isNew) logEvent(orbLabel(r)+' joined');
+      if(isNew){ logEvent(orbLabel(r)+' joined');
+        if(Net.mode==='peer' && Net.amHost && !roomOrder.includes(msg.id)) roomOrder.push(msg.id); }
       break; }
     case 'bots':{
       for(const b of msg.list){
@@ -656,11 +728,13 @@ Net.onMessage(msg=>{
     case 'tag': applyTag(msg); break;
     case 'it':  applyItChange(msg.id,msg.seq); break;
     case 'botcfg': botsEnabled=!!msg.enabled; break;
-    case 'gamecfg': gameMode=msg.mode||gameMode; break;
+    case 'gamecfg': gameMode=msg.mode||gameMode; if(msg.rotSec) rotSec=msg.rotSec; if(msg.timerLeft!=null) timerLeft=msg.timerLeft; break;
+    case 'roster': if(!Net.amHost && Array.isArray(msg.order)) roomOrder=msg.order; break;
     case 'win': winName=msg.name; winUntil=performance.now()+5000;
       logEvent('<b>'+escapeHtml(msg.name)+'</b> <span class="it">wins the round</span>'); break;
     case 'reset': applyReset(); break;
-    case 'bye': { const r=remotes.get(msg.id); if(r&&!r.isBot) logEvent(orbLabel(r)+' left'); remotes.delete(msg.id); break; }
+    case 'bye': { const r=remotes.get(msg.id); if(r&&!r.isBot) logEvent(orbLabel(r)+' left'); remotes.delete(msg.id);
+      if(Net.amHost) roomOrder=roomOrder.filter(id=>id!==msg.id); break; }
   }
 });
 
@@ -690,6 +764,23 @@ EMOJIS.forEach(e=>{ const b=document.createElement('button'); b.type='button'; b
   b.onclick=()=>{ if(me){ me.emoji=e; emojiBtn.textContent=e; } emojiPalette.classList.remove('show'); };
   emojiPalette.appendChild(b); });
 emojiBtn.onclick=()=> emojiPalette.classList.toggle('show');
+
+// in-game rules control — the room creator (host) changes the rules live for everyone
+const ruleCtl=document.getElementById('ruleCtl'), ruleCtlSel=document.getElementById('ruleCtlSel');
+let _ruleShown=false, _ruleMode='';
+const rotSecSel=document.getElementById('rotSecSel');
+function setGameMode(mode){
+  if(mode===gameMode) return;
+  gameMode=mode; winPending=false; winUntil=0; winName=''; itTimerAcc=0; timerLeft=rotSec;
+  if(mode==='race'){ applyReset(); Net.send({type:'reset'}); }   // start the race clean
+  Net.send({type:'gamecfg',mode,rotSec,timerLeft:Math.round(timerLeft)});
+  logEvent('<b>Rules → '+(RULE_NAME[mode]||mode)+'</b>');
+}
+function setRotSec(s){ rotSec=s; itTimerAcc=0; timerLeft=rotSec;
+  Net.send({type:'gamecfg',mode:gameMode,rotSec,timerLeft:Math.round(timerLeft)});
+  logEvent('<b>IT switches every '+s+'s</b>'); }
+ruleCtlSel.onchange=()=> setGameMode(ruleCtlSel.value);
+rotSecSel.onchange=()=> setRotSec(parseInt(rotSecSel.value,10)||20);
 
 const touch={active:false,sx:0,sy:0,x:0,y:0,id:null};
 function onTouchStart(e){ const t=e.changedTouches[0]; touch.active=true; touch.id=t.identifier;
@@ -777,6 +868,10 @@ function tick(){
   if(host && !wasHost) remotes.forEach((r,id)=>{ if(r.isBot) remotes.delete(id); }); // shed leftover bot views
   if(!host && wasHost) bots=[];
   wasHost=host;
+  // the live rules control belongs to the room creator (host) only
+  if(host!==_ruleShown){ _ruleShown=host; ruleCtl.classList.toggle('show',host); }
+  if(host && _ruleMode!==gameMode){ _ruleMode=gameMode; ruleCtlSel.value=gameMode;
+    rotSecSel.style.display=(gameMode==='timer')?'':'none'; rotSecSel.value=String(rotSec); }
 
   if(host){
     if(botsEnabled && bots.length===0) initBots();
@@ -787,7 +882,7 @@ function tick(){
     if(!getOrbs().map(o=>o.id).includes(itId)) hostAssignIt();
 
     // timer mode: rotate IT to a random orb on an interval
-    if(gameMode==='timer'){ itTimerAcc+=dt; if(itTimerAcc>=ROT_SEC){ itTimerAcc=0; hostAssignIt(); } }
+    if(gameMode==='timer'){ itTimerAcc+=dt; if(itTimerAcc>=rotSec){ itTimerAcc=0; hostAssignIt(); } timerLeft=Math.max(0,rotSec-itTimerAcc); }
 
     // race mode: first to RACE_TARGET tags wins, then scores reset + fresh IT
     if(gameMode==='race'){
@@ -801,9 +896,13 @@ function tick(){
       }
     }
 
-    // keep clients in sync on the chosen rules (cheap, ~1 Hz)
-    cfgAcc+=dt*1000; if(cfgAcc>=1000){ cfgAcc=0; Net.send({type:'gamecfg',mode:gameMode}); }
+    // keep clients in sync on the chosen rules + join order (cheap, ~1 Hz)
+    cfgAcc+=dt*1000; if(cfgAcc>=1000){ cfgAcc=0; Net.send({type:'gamecfg',mode:gameMode,rotSec,timerLeft:Math.round(timerLeft)});
+      if(Net.mode==='peer'){ roomOrder=roomOrder.filter(id=>id===myId||remotes.has(id)); Net.send({type:'roster',order:roomOrder}); } }
   }
+
+  // clients tick the timer countdown locally between host syncs
+  if(gameMode==='timer' && !host) timerLeft=Math.max(0,timerLeft-dt);
 
   // broadcast my state + bots
   sendAcc+=dt*1000;
@@ -962,11 +1061,13 @@ function setBanner(big,sub,col){
 }
 // single-screen host: live player count on the join panel
 const hostCountEl=document.getElementById('hostCount');
+const hostTimerEl=document.getElementById('hostTimer');
 let _hcount=-1;
 function updateHostInfo(now){
   let players=0; remotes.forEach(r=>{ if(!r.isBot && now-r.lastSeen<STALE_MS) players++; });
   if(players!==_hcount){ _hcount=players;
     hostCountEl.textContent=players+(players===1?' player':' players')+' connected'; }
+  hostTimerEl.textContent = gameMode==='timer' ? ('IT switches in '+Math.ceil(timerLeft)+'s') : '';
 }
 function drawHUD(now){
   // scoreboard (rebuild DOM only when something changed)
@@ -990,13 +1091,14 @@ function drawHUD(now){
     setBanner(ICON_WIN+'<span>'+escapeHtml(winName)+' wins the round!</span>','resetting scores…','#fafafa');
   } else if(itId===myId){
     const sub = now<me.immuneUntil ? 'get ready…'
-      : (gameMode==='onetagger'||gameMode==='timer') ? 'hunt everyone — +'+TAG_POINTS+' per tag'
+      : gameMode==='timer' ? 'you hold IT — switches in '+Math.ceil(timerLeft)+'s'
+      : gameMode==='onetagger' ? 'hunt everyone — +'+TAG_POINTS+' per tag'
       : 'catch someone to score +'+TAG_POINTS;
     setBanner(ICON_IT+'<span>YOU\'RE IT</span>', sub, '#ef4444');
   } else { const it=entityById(itId);
     const big = it ? '<span>Run! '+escapeHtml(it.name)+' is IT</span>' : '';
-    const sub = it ? (gameMode==='onetagger'?'stay away from the tagger'
-      :gameMode==='timer'?'IT rotates on a timer':'tag others when it\'s your turn') : '';
+    const sub = it ? (gameMode==='timer'?'IT switches in '+Math.ceil(timerLeft)+'s'
+      :gameMode==='onetagger'?'stay away from the tagger':'tag others when it\'s your turn') : '';
     setBanner(big, sub, '#fafafa'); }
 }
 function drawMini(){
@@ -1111,6 +1213,7 @@ playBtn.onclick=async()=>{
     try{ await Net.startOnline(room); }
     catch(err){ lobbyErr.textContent=err.message||'Could not start the room.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; return; }
     if(!Net.amHost){ lobbyErr.textContent='That code is already in use — pick another.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; spectator=false; return; }
+    roomOrder=[myId];
     document.body.classList.add('spectator');
     document.getElementById('hostCode').textContent=room;
     hostInfoEl.classList.add('show');
@@ -1127,6 +1230,7 @@ playBtn.onclick=async()=>{
       else { const room=(roomIn.value.trim()||randCode()).toUpperCase(); roomIn.value=room; roomCode=room;
         playBtn.textContent='Connecting…'; playBtn.disabled=true;
         await Net.startOnline(room);
+        if(Net.amHost) roomOrder=[myId];   // room creator anchors the join order
         statText.textContent='online room';
         statCode.innerHTML='room <span class="code">'+escapeHtml(room)+'</span>'+
           '<button id="copyRoom" class="copybtn" title="Copy room code">Copy</button>';
@@ -1147,6 +1251,23 @@ playBtn.onclick=async()=>{
 // say goodbye so others drop us promptly (only on a real unload)
 function sayBye(){ if(running) Net.send({type:'bye',id:myId}); }
 addEventListener('pagehide',sayBye);
+
+// host migration: if the room creator leaves, the next player in join order takes over
+Net.onHostLost = ()=>{
+  if(Net.amHost) return;
+  toast('Host left — reconnecting…');
+  const lost = roomOrder[0];
+  const candidates = roomOrder.filter(id=>id && id!==lost);   // everyone after the creator, in join order
+  const myRank = candidates.indexOf(myId);
+  const promote = ()=> Net.becomeHost().then(ok=>{ if(ok){ roomOrder=[myId]; bots=[]; itTimerAcc=0;
+    toast('You are the new host'); logEvent('<b>'+escapeHtml(me?me.name:'You')+' is the new room owner</b>'); } });
+  if(myRank===0){ promote(); }                                // first joiner becomes owner
+  else {
+    Net.rejoin();                                             // reconnect to the new owner
+    const rank = myRank<0 ? candidates.length+1 : myRank;     // fallback if the chosen owner never comes up
+    setTimeout(()=>{ if(!Net.amHost && !(Net._hostConn && Net._hostConn.open)) promote(); }, 4500 + rank*4000);
+  }
+};
 
 // refresh / close protection while in a match
 const leaveModal=document.getElementById('leaveModal');
