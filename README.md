@@ -1,4 +1,4 @@
-# Orb Tag — mncoleman
+# Tag — mncoleman
 
 A single-file, top-down multiplayer game of tag through an obstacle arena. Pick an emoji orb, dodge through the course, and tag others to score.
 
