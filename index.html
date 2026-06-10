@@ -607,6 +607,8 @@ let gameMode='classic';           // classic | timer | race | onetagger
 let spectator=false;              // single-screen host: shows whole arena, has no orb of its own
 let roomCode='';                  // current online/single-screen room code
 let roomOrder=[];                 // peer rooms: player ids in join order (host-maintained) for host migration
+let lastNetMsg=0;                 // last time any message arrived (client: detects a silent host drop)
+let migInProgress=false;          // guards against re-entrant host migration
 let tagSeq=0;                      // monotonic-ish sequence for IT changes
 // round state (host-driven, mirrored to clients)
 let itTimerAcc=0;                  // timer mode: seconds since last IT rotation
@@ -706,6 +708,7 @@ function hostAssignIt(){
 /* ---------- incoming messages ---------- */
 Net.onMessage(msg=>{
   const now=performance.now();
+  lastNetMsg=now;
   switch(msg.type){
     case 'state':{
       if(msg.id===myId) return;
@@ -734,7 +737,9 @@ Net.onMessage(msg=>{
       logEvent('<b>'+escapeHtml(msg.name)+'</b> <span class="it">wins the round</span>'); break;
     case 'reset': applyReset(); break;
     case 'bye': { const r=remotes.get(msg.id); if(r&&!r.isBot) logEvent(orbLabel(r)+' left'); remotes.delete(msg.id);
-      if(Net.amHost) roomOrder=roomOrder.filter(id=>id!==msg.id); break; }
+      if(Net.amHost) roomOrder=roomOrder.filter(id=>id!==msg.id);
+      else if(Net.mode==='peer' && msg.id===roomOrder[0]) Net.onHostLost && Net.onHostLost();  // the room creator left → migrate
+      break; }
   }
 });
 
@@ -840,9 +845,9 @@ function updateBots(dt){
 /* =========================================================================
    MAIN LOOP
    ========================================================================= */
-function tick(){
+function step(){
   if(!running) return;
-  const t=performance.now(); let dt=(t-lastT)/1000; lastT=t; if(dt>0.05)dt=0.05;
+  const t=performance.now(); let dt=(t-lastT)/1000; lastT=t; if(dt>0.1)dt=0.1;
   const now=t;
 
   // local movement + tagging (single-screen host has no orb, so skip)
@@ -904,6 +909,9 @@ function tick(){
   // clients tick the timer countdown locally between host syncs
   if(gameMode==='timer' && !host) timerLeft=Math.max(0,timerLeft-dt);
 
+  // client: if the relay (host) goes silent, assume it dropped → migrate
+  if(Net.mode==='peer' && !Net.amHost && !migInProgress && lastNetMsg && now-lastNetMsg>6000) Net.onHostLost && Net.onHostLost();
+
   // broadcast my state + bots
   sendAcc+=dt*1000;
   if(sendAcc>=SEND_MS){
@@ -918,9 +926,12 @@ function tick(){
   for(let i=floaters.length-1;i>=0;i--){ const f=floaters[i]; f.y-=40*dt; f.life-=dt*0.9; if(f.life<=0) floaters.splice(i,1); }
   for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.92; p.vy*=0.92; p.life-=dt*1.6; if(p.life<=0) particles.splice(i,1); }
 
-  render(now);
-  requestAnimationFrame(tick);
+  if(!document.hidden) render(now);   // skip drawing a hidden tab; sim + networking still ran
 }
+// render at full rate when visible; a slow timer keeps simulation + networking alive when the tab
+// is backgrounded (rAF is frozen for hidden tabs, which would otherwise stall the whole room)
+function tick(){ if(!document.hidden) step(); requestAnimationFrame(tick); }
+setInterval(()=>{ if(running && document.hidden) step(); }, 200);
 
 /* =========================================================================
    RENDER
@@ -1254,16 +1265,18 @@ addEventListener('pagehide',sayBye);
 
 // host migration: if the room creator leaves, the next player in join order takes over
 Net.onHostLost = ()=>{
-  if(Net.amHost) return;
+  if(Net.amHost || migInProgress) return;
+  migInProgress=true; lastNetMsg=performance.now();
   toast('Host left — reconnecting…');
   const lost = roomOrder[0];
   const candidates = roomOrder.filter(id=>id && id!==lost);   // everyone after the creator, in join order
   const myRank = candidates.indexOf(myId);
-  const promote = ()=> Net.becomeHost().then(ok=>{ if(ok){ roomOrder=[myId]; bots=[]; itTimerAcc=0;
-    toast('You are the new host'); logEvent('<b>'+escapeHtml(me?me.name:'You')+' is the new room owner</b>'); } });
+  const promote = ()=> Net.becomeHost().then(ok=>{ migInProgress=false; lastNetMsg=performance.now();
+    if(ok){ roomOrder=[myId]; bots=[]; itTimerAcc=0;
+      toast('You are the new host'); logEvent('<b>'+escapeHtml(me?me.name:'You')+' is the new room owner</b>'); } });
   if(myRank===0){ promote(); }                                // first joiner becomes owner
   else {
-    Net.rejoin();                                             // reconnect to the new owner
+    Net.rejoin().then(()=>{ migInProgress=false; lastNetMsg=performance.now(); });   // reconnect to the new owner
     const rank = myRank<0 ? candidates.length+1 : myRank;     // fallback if the chosen owner never comes up
     setTimeout(()=>{ if(!Net.amHost && !(Net._hostConn && Net._hostConn.open)) promote(); }, 4500 + rank*4000);
   }
