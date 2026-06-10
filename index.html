@@ -821,16 +821,16 @@ function drawOrb(o,now){
   // spawn-in pop: scale up + fade in for ~380ms after a (re)spawn
   const age=now-(o.spawnT||0), inT=age<380?age/380:1;
   const inScale=0.25+0.75*inT, inAlpha=Math.min(1,inT*1.3), R=PLAYER_R*inScale;
-  // emoji avatar — subtle neutral halo so dark emojis stay legible on the dark arena (not a color haze)
+  // orb = emoji seated on a clean frosted coin so every emoji reads on the dark arena
+  // (neutral backing, not the player-color haze that was removed earlier)
   const flash = immune && (((now/120)|0)%2===0);
-  ctx.globalAlpha=(flash?0.4:1)*inAlpha;
-  ctx.font=((R*2.1)|0)+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+  ctx.globalAlpha=(flash?0.55:1)*inAlpha;
+  ctx.beginPath(); ctx.arc(o.x,o.y,R*1.2,0,7);
+  ctx.fillStyle='rgba(245,247,251,0.96)'; ctx.fill();
+  ctx.lineWidth=2; ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.stroke();
+  ctx.font=((R*1.7)|0)+'px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='rgba(255,255,255,0.7)'; ctx.shadowBlur=R*1.2; ctx.shadowOffsetX=0; ctx.shadowOffsetY=0;
   ctx.fillText(o.emoji||'🙂', o.x, o.y+1);
-  ctx.fillText(o.emoji||'🙂', o.x, o.y+1);
-  ctx.fillText(o.emoji||'🙂', o.x, o.y+1); // extra passes deepen the halo so dark emojis read on black
-  ctx.shadowBlur=0; ctx.shadowColor='transparent';
   ctx.textBaseline='alphabetic';
   // IT ring (gameplay indicator, not a color haze)
   ctx.globalAlpha=inAlpha;
