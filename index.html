@@ -410,7 +410,7 @@ const IT_BONUS   = 1.13;     // the IT orb is a touch faster
 const RESP       = 11;       // velocity responsiveness
 const IMMUNE_MS  = 1600;     // grace after becoming IT
 const TAG_POINTS = 100;
-const STALE_MS   = 3000;     // drop a remote we haven't heard from
+const STALE_MS   = 5000;     // hide a remote we haven't heard from (was 3000 — too eager; blinked orbs out on brief gaps)
 const SEND_MS    = 50;       // 20 Hz state broadcast
 const BOT_COUNT  = 4;
 const COLORS = ['#5ce1ff','#ff6ad5','#ffd34e','#6affc0','#a78bfa','#ff8a5b','#5ad1ff','#9dff5a','#ff5e8a','#7cf0ff'];
@@ -486,6 +486,27 @@ function move(e,inx,iny,dt,fast){
 /* =========================================================================
    NETWORK LAYER
    ========================================================================= */
+// ---- WebRTC ICE servers ----
+// STUN alone can't punch through symmetric NAT / CGNAT (typical on cellular data), so
+// phones joining via QR need a TURN *relay*. We fetch fresh multi-transport relay creds
+// (UDP + TCP + TLS/443) from Metered at connect time; the STUN list below is the always-on
+// fallback. SETUP: create a free app at https://dashboard.metered.ca, then paste your
+// subdomain + API key here. Left blank → STUN-only (works on many networks, fails on
+// strict cellular). The apiKey is meant to be used client-side (rate/domain limited).
+const METERED = { subdomain:'mncoleman', apiKey:'cee4f602fbef26c99a841472b21dbb8d8d55' };
+const RTC_CONFIG = { iceServers: [
+  { urls: ['stun:stun.l.google.com:19302','stun:stun1.l.google.com:19302','stun:stun.cloudflare.com:3478'] },
+] };
+let _iceLoaded=false;
+// pull the TURN relay list from Metered once, then reuse it for the whole session
+async function ensureIceServers(){
+  if(_iceLoaded || !METERED.subdomain || !METERED.apiKey) return;
+  _iceLoaded=true;                              // one shot; the STUN fallback covers a failed fetch
+  try{
+    const r=await fetch('https://'+METERED.subdomain+'.metered.live/api/v1/turn/credentials?apiKey='+encodeURIComponent(METERED.apiKey));
+    if(r.ok){ const list=await r.json(); if(Array.isArray(list)&&list.length) RTC_CONFIG.iceServers=RTC_CONFIG.iceServers.concat(list); }
+  }catch(e){ console.warn('TURN credential fetch failed — falling back to STUN only',e); }
+}
 const Net = {
   mode:'solo', amHost:true, room:'', hostId:'', onHostLost:null,
   _cb:null, _bc:null, _peer:null, _conns:[], _hostConn:null, _migrating:false,
@@ -501,16 +522,17 @@ const Net = {
   },
 
   async startOnline(room){
-    this.mode='peer'; this._conns=[]; this.room=room;
+    this.mode='peer'; this._conns=[]; this.room=room; this.amHost=false;
     this.hostId = 'orbtag-host-' + room.toLowerCase().replace(/[^a-z0-9]/g,'');
     await loadPeerJS();
+    await ensureIceServers();          // load TURN relay creds before the first Peer is created
     return new Promise(resolve=>{
-      const host = new Peer(this.hostId);
-      let settled=false; const done=()=>{ if(!settled){settled=true; resolve();} };
-      host.on('open', ()=>{ this.amHost=true; this._peer=host; this._attachHostPeer(host); done(); });
+      const host = new Peer(this.hostId,{config:RTC_CONFIG});
+      let settled=false; const done=ok=>{ if(!settled){settled=true; resolve(ok);} };  // ok=true only on a real connection
+      host.on('open', ()=>{ this.amHost=true; this._peer=host; this._attachHostPeer(host); done(true); });
       host.on('error', err=>{
         if(err.type==='unavailable-id'){ this.amHost=false; this._connectClient(done); }  // already hosted → join as client
-        else { console.warn('peer error',err); done(); }
+        else { console.warn('peer error',err); done(false); }
       });
     });
   },
@@ -523,16 +545,17 @@ const Net = {
     });
   },
   _connectClient(done){
-    const cl = new Peer(); this._peer = cl;
+    const cl = new Peer(undefined,{config:RTC_CONFIG}); this._peer = cl;
+    let settled=false; const finish=ok=>{ if(!settled){ settled=true; done && done(ok); } };
     cl.on('open', ()=>{
-      const conn = cl.connect(this.hostId,{reliable:true});
+      const conn = cl.connect(this.hostId,{reliable:false});   // unordered: a lost position packet can't stall newer ones
       this._hostConn = conn;
       conn.on('data', d=> this._cb && this._cb(d));
-      conn.on('open', ()=> done && done());
+      conn.on('open', ()=> finish(true));                      // only a real open counts as joined (no silent ghost sessions)
       conn.on('close', ()=>{ if(!this._migrating && this.mode==='peer' && !this.amHost) this.onHostLost && this.onHostLost(); });
-      setTimeout(()=> done && done(), 1600);   // proceed even if the open event is slow
+      setTimeout(()=> finish(false), 12000);                   // give the handshake room on slow cellular, then fail cleanly
     });
-    cl.on('error', e=>{ console.warn('client peer error',e); done && done(); });
+    cl.on('error', e=>{ console.warn('client peer error',e); finish(false); });
   },
 
   // migration: re-claim the room's host id and become the relay host
@@ -542,7 +565,7 @@ const Net = {
       let tries=0;
       const attempt=()=>{
         try{ this._peer && this._peer.destroy(); }catch(e){}
-        const host=new Peer(this.hostId);
+        const host=new Peer(this.hostId,{config:RTC_CONFIG});
         host.on('open', ()=>{ this.amHost=true; this._peer=host; this._conns=[]; this._hostConn=null; this._attachHostPeer(host); this._migrating=false; resolve(true); });
         host.on('error', err=>{
           if(err.type==='unavailable-id' && tries++<12) setTimeout(attempt,1200);  // old id not freed yet
@@ -558,9 +581,9 @@ const Net = {
     return new Promise(resolve=>{
       let tries=0, ok=false;
       try{ this._peer && this._peer.destroy(); }catch(e){}
-      const cl=new Peer(); this._peer=cl;
+      const cl=new Peer(undefined,{config:RTC_CONFIG}); this._peer=cl;
       const tryConnect=()=>{
-        const conn=cl.connect(this.hostId,{reliable:true}); this._hostConn=conn;
+        const conn=cl.connect(this.hostId,{reliable:false}); this._hostConn=conn;
         conn.on('open', ()=>{ ok=true; this._migrating=false; resolve(true); });
         conn.on('data', d=> this._cb && this._cb(d));
         conn.on('close', ()=>{ if(!this._migrating && !this.amHost) this.onHostLost && this.onHostLost(); });
@@ -865,8 +888,10 @@ function step(){
     if(dx*dx+dy*dy>200*200){ r.x=r.netx; r.y=r.nety; r.spawnT=performance.now(); }
     else { const k=Math.min(1,12*dt); r.x+=dx*k; r.y+=dy*k; } });
 
-  // prune stale remotes
-  remotes.forEach((r,id)=>{ if(now-r.lastSeen>STALE_MS) remotes.delete(id); });
+  // prune stale remotes: getOrbs() already hides anyone past STALE_MS, so only HARD-drop
+  // after a long gap — keeps a briefly-backgrounded phone's record so it resumes smoothly
+  // (no "joined" spam, no blink-in as a brand-new orb) instead of being re-created on return
+  remotes.forEach((r,id)=>{ if(now-r.lastSeen>STALE_MS*6) remotes.delete(id); });
 
   // host duties: bots + assign IT
   const host=amHostNow();
@@ -932,6 +957,15 @@ function step(){
 // is backgrounded (rAF is frozen for hidden tabs, which would otherwise stall the whole room)
 function tick(){ if(!document.hidden) step(); requestAnimationFrame(tick); }
 setInterval(()=>{ if(running && document.hidden) step(); }, 200);
+// coming back from a backgrounded/locked tab: mobile browsers freeze timers and often tear
+// down WebRTC, so re-anchor the clocks (no dt / stale-detection spike) and, if our link to the
+// host died while we were away, reconnect immediately instead of waiting to be pruned or time out.
+addEventListener('visibilitychange', ()=>{
+  if(document.hidden || !running) return;
+  lastT=performance.now(); lastNetMsg=performance.now();
+  if(Net.mode==='peer' && !Net.amHost && !migInProgress && !(Net._hostConn && Net._hostConn.open))
+    Net.onHostLost && Net.onHostLost();
+});
 
 /* =========================================================================
    RENDER
@@ -1221,9 +1255,13 @@ playBtn.onclick=async()=>{
     me=null;
     const room=(roomIn.value.trim()||randCode()).toUpperCase(); roomIn.value=room; roomCode=room;
     playBtn.textContent='Starting…'; playBtn.disabled=true;
-    try{ await Net.startOnline(room); }
+    let started=false;
+    try{ started = await Net.startOnline(room); }
     catch(err){ lobbyErr.textContent=err.message||'Could not start the room.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; return; }
-    if(!Net.amHost){ lobbyErr.textContent='That code is already in use — pick another.'; playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; spectator=false; return; }
+    if(!Net.amHost){   // we're not the host: either the code is taken (we connected as a client) or the connection failed
+      lobbyErr.textContent = started ? 'That code is already in use — pick another.'
+                                     : 'Could not start the room — check your connection and try again.';
+      playBtn.innerHTML=PLAY_HTML; playBtn.disabled=false; spectator=false; return; }
     roomOrder=[myId];
     document.body.classList.add('spectator');
     document.getElementById('hostCode').textContent=room;
@@ -1240,7 +1278,8 @@ playBtn.onclick=async()=>{
       else if(chosenMode==='local'){ Net.startLocal(); statText.textContent='local network (this device)'; }
       else { const room=(roomIn.value.trim()||randCode()).toUpperCase(); roomIn.value=room; roomCode=room;
         playBtn.textContent='Connecting…'; playBtn.disabled=true;
-        await Net.startOnline(room);
+        const joined = await Net.startOnline(room);
+        if(!joined) throw new Error('Could not connect to the room. Check the code and your connection, then try again.');
         if(Net.amHost) roomOrder=[myId];   // room creator anchors the join order
         statText.textContent='online room';
         statCode.innerHTML='room <span class="code">'+escapeHtml(room)+'</span>'+
